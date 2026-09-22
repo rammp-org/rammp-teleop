@@ -1,0 +1,3 @@
+default_target: dojo
+sync:
+  - {from: ., to: ros2_ws/src/rammp-teleop}

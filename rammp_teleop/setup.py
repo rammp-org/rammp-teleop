@@ -21,7 +21,6 @@ setup(
     maintainer_email="swapnil.pande98@gmail.com",
     description="Xbox and Quest 3 teleop for the Kinova Gen3 via the streaming tier.",
     license="Proprietary",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             f"xbox_teleop = {package_name}.xbox_node:main",

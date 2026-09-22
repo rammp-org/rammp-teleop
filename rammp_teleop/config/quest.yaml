@@ -1,0 +1,50 @@
+# Parameters for quest_teleop and quest_reader.
+#
+# r_align_euler_zyx_deg is a PER-SESSION calibration: the Quest tracking frame's
+# yaw depends on how the headset was oriented at boot. Run
+#   ros2 run rammp_teleop quest_calibrate
+# and paste the printed triple here before flying. The value below is a stale
+# example from a previous session, not a default that works.
+quest_teleop:
+  ros__parameters:
+    controller: ee_pose_impedance     # compliant (joint impedance + in-loop IK); ee_pose_position is stiff
+    owner_id: quest_teleop
+    rate_hz: 60.0
+    stream_timeout_s: 0.2             # must exceed 1/rate_hz
+    hand: right
+    input_timeout_s: 0.5              # no /quest/* for this long => grip reads as released (freeze)
+
+    # --- controller -> base mapping ---
+    r_align_euler_zyx_deg: [128.7663, -8.3652, 92.4841]
+    trans_smooth: 0.8                 # first-order lag on the command, (0, 1]; 1.0 = raw
+    rot_smooth: 0.8
+    jump_pos_tol: 0.05                # m per tick; larger controller jumps are rejected
+    jump_rot_tol: 0.5                 # rad per tick
+    pos_scale: 1.0
+    rot_frame: base                   # base | tool
+    r_tool_euler_zyx_deg: [0.0, 0.0, 0.0]
+
+    # --- safety: workspace box (base frame, m) and per-tick step caps ---
+    ws_min: [0.0, -0.70, 0.05]
+    ws_max: [1.05, 0.70, 1.00]
+    max_lin_step: 0.01                # m per tick  (0.6 m/s at 60 Hz)
+    max_ang_step: 0.05                # rad per tick (3 rad/s at 60 Hz)
+
+    # --- gripper (index trigger, only while grip held) ---
+    gripper_binary: false
+    gripper_threshold: 0.5
+    gripper_cmd_speed: 0.5            # GripperSetpoint.speed
+    gripper_force: 0.3                # GripperSetpoint.force (current ceiling)
+
+    # --- /quest/joy layout from quest_reader: buttons=[grip, A, B], axes=[trigger] ---
+    button_grip: 0
+    button_resync: 1                  # A
+    button_estop: 2                   # B
+    axis_trigger: 0
+
+quest_reader:
+  ros__parameters:
+    hand: right
+    quest_ip: ""                      # empty = USB; set for adb over Wi-Fi
+    rate_hz: 60.0
+    mock: false                       # true = scripted controller, no headset
