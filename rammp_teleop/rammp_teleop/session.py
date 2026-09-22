@@ -98,6 +98,10 @@ class TeleopNodeBase(Node):
             )
         self.uses_pose = self.controller in POSE_CONTROLLERS
 
+        # Set by the signal handler in run(); every blocking wait in setup()
+        # checks it so SIGINT/SIGTERM during startup ends the node promptly.
+        self.stop_requested = False
+
         # --- session state ---------------------------------------------------
         self._token: Optional[np.ndarray] = None
         self._token_valid = False
@@ -292,6 +296,8 @@ class TeleopNodeBase(Node):
 
         deadline = time.monotonic() + self.state_wait_timeout_s
         while not self._have_state():
+            if self.stop_requested:
+                return False
             if time.monotonic() > deadline:
                 log.error(
                     "no /ee_state or /joint_states received; is kinova_gen3_node running?"
@@ -305,6 +311,8 @@ class TeleopNodeBase(Node):
             AcquireControl.Request(owner_id=self.owner_id),
             "acquire_control",
         )
+        if self.stop_requested:
+            return False
         if resp is None or not resp.accepted:
             log.error(f"acquire_control refused: {getattr(resp, 'message', '')}")
             return False
@@ -337,6 +345,8 @@ class TeleopNodeBase(Node):
             self._setpoint_pub.get_subscription_count() == 0
             and time.monotonic() < settle_deadline
         ):
+            if self.stop_requested:
+                return False
             rclpy.spin_once(self, timeout_sec=0.1)
         if self._setpoint_pub.get_subscription_count() == 0:
             log.warn(f"no subscriber discovered on {self._channel} yet; opening anyway")
@@ -509,21 +519,20 @@ def run(node_factory: Callable[[], TeleopNodeBase], argv=None) -> int:
     close the stream and release control, so handle the signals ourselves.
     """
     rclpy.init(args=argv, signal_handler_options=SignalHandlerOptions.NO)
-    stop = {"flag": False}
+    node = node_factory()
 
     def on_signal(signum, _frame):
-        stop["flag"] = True
+        node.stop_requested = True
 
     signal.signal(signal.SIGINT, on_signal)
     signal.signal(signal.SIGTERM, on_signal)
 
-    node = node_factory()
     code = 0
     try:
         if not node.setup():
             code = 1
         else:
-            while rclpy.ok() and not stop["flag"]:
+            while rclpy.ok() and not node.stop_requested:
                 rclpy.spin_once(node, timeout_sec=0.1)
     finally:
         try:

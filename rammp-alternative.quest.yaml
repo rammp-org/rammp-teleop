@@ -13,6 +13,6 @@ container:
     - /dev:/dev
   environment:
     ROS_DOMAIN_ID: "0"
-  command: ros2 launch rammp_teleop quest.launch.py
+  command: /module_ws/src/rammp-teleop/scripts/launch_entry.py rammp_teleop quest.launch.py
 publishes: [/setpoint/pose, /setpoint/gripper, /estop, /quest/right/pose, /quest/joy]
 subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status, /control_status]

@@ -32,6 +32,8 @@ RUN . /opt/ros/humble/setup.sh \
  && colcon build \
  && rm -rf /module_ws/build /module_ws/log
 
-# Default: the Xbox pad. Fragments override this per alternative. `ros2 launch`
-# forwards SIGTERM to its children, which scripts/smoke.sh checks.
-CMD ["ros2", "launch", "rammp_teleop", "xbox.launch.py"]
+# Default: the Xbox pad; fragments override this per alternative. Always go
+# through launch_entry.py: Humble's `ros2 launch` orphans its children on
+# SIGTERM (what `docker stop` sends) and only shuts down cleanly on SIGINT.
+# scripts/smoke.sh checks that the container exits on SIGTERM.
+CMD ["/module_ws/src/rammp-teleop/scripts/launch_entry.py", "rammp_teleop", "xbox.launch.py"]

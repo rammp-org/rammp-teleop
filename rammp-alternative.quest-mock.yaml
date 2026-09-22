@@ -8,6 +8,6 @@ container:
   ipc: host
   environment:
     ROS_DOMAIN_ID: "0"
-  command: ros2 launch rammp_teleop quest.launch.py mock:=true
+  command: /module_ws/src/rammp-teleop/scripts/launch_entry.py rammp_teleop quest.launch.py mock:=true
 publishes: [/setpoint/pose, /setpoint/gripper, /estop, /quest/right/pose, /quest/joy]
 subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status, /control_status]

@@ -20,7 +20,7 @@ NAME="rammp-smoke-$$"
 
 docker run -d --rm --name "$NAME" --network host \
   -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}" "$IMAGE" \
-  ros2 launch rammp_teleop quest.launch.py mock:=true >/dev/null
+  /module_ws/src/rammp-teleop/scripts/launch_entry.py rammp_teleop quest.launch.py mock:=true >/dev/null
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
 
 sleep 5
