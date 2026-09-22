@@ -8,8 +8,9 @@ Operator-input nodes for the Kinova Gen3: an Xbox pad and a Meta Quest 3
 controller. Both drive the arm through
 [`kinova-gen3-ros2`](https://github.com/rammp-org/kinova-gen3-ros2)'s streaming
 tier: they acquire control, open a stream on a pose controller, and publish an
-absolute target every tick. Nothing moves until the operator engages (LB on the
-pad, grip squeeze on the Quest), and letting go holds the arm where it is.
+absolute target every tick. Nothing moves until the operator engages (a stick
+deflection on the pad, grip squeeze on the Quest), and letting go holds the arm
+where it is.
 
 | Input | Launch | Controller | How it makes a target |
 |---|---|---|---|

@@ -1,8 +1,9 @@
 """Xbox-controller teleop through the streaming tier.
 
-Motion happens only while the deadman (LB) is held. On every deadman press AND
-release the target is re-seeded from the measured state, so letting go stops the
-arm where it is rather than where the integrator got to.
+The self-centering sticks are the deadman: the arm moves while a stick, the
+D-pad or a trigger is deflected and holds otherwise. On every deflected -> released
+edge (and back) the target is re-seeded from the measured state, so letting go
+stops the arm where it is rather than at a leashed target ahead of it.
 """
 from __future__ import annotations
 
@@ -41,7 +42,6 @@ class XboxTeleopNode(TeleopNodeBase):
             axis_rt=dp("axis_rt", 5).value,
             axis_dpad_x=dp("axis_dpad_x", 6).value,
             axis_dpad_y=dp("axis_dpad_y", 7).value,
-            button_deadman=dp("button_deadman", 4).value,
             button_estop=dp("button_estop", 1).value,
             button_estop_clear=dp("button_estop_clear", 7).value,
             button_resync=dp("button_resync", 3).value,
@@ -56,13 +56,13 @@ class XboxTeleopNode(TeleopNodeBase):
         self._axes: list = []
         self._prev_buttons: list = []
         self._prev_select_step = 0
-        self._deadman_prev = False
+        self._active_prev = False
 
         self.create_subscription(Joy, self.joy_topic, self._on_joy, 10)
-        self.get_logger().info("Hold LB to move. B = e-stop, Start = clear, Y = resync.")
+        self.get_logger().info("Sticks move the arm. B = e-stop, Start = clear, Y = resync.")
 
     def engaged_hint(self) -> str:
-        return "hold LB"
+        return "move a stick"
 
     def _on_joy(self, msg: Joy) -> None:
         self._joy = msg
@@ -89,11 +89,11 @@ class XboxTeleopNode(TeleopNodeBase):
         if rising(self.map.button_resync):
             self.resync("Y button")
 
-        deadman = joy_fresh and self.map.deadman(buttons)
-        if deadman != self._deadman_prev:
-            self.resync("deadman pressed" if deadman else "deadman released")
-            self._deadman_prev = deadman
-        return deadman
+        active = joy_fresh and self.map.is_active(axes, self.deadzone)
+        if active != self._active_prev:
+            self.resync("sticks deflected" if active else "sticks released")
+            self._active_prev = active
+        return active
 
     def compute_target(self, dt: float, engaged: bool):
         if self.uses_pose:

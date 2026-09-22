@@ -22,7 +22,7 @@ xbox_teleop:
     target_lead_rad: 0.2
     joint_target_lead_rad: 0.1
 
-    # --- gripper (RT closes, LT opens; only while LB held) ---
+    # --- gripper (RT closes, LT opens) ---
     gripper_speed: 1.0                # full travel per second at full trigger
     gripper_cmd_speed: 0.5            # GripperSetpoint.speed
     gripper_force: 0.3                # GripperSetpoint.force (current ceiling)
@@ -36,7 +36,6 @@ xbox_teleop:
     axis_rt: 5
     axis_dpad_x: 6
     axis_dpad_y: 7
-    button_deadman: 4                 # LB
     button_estop: 1                   # B
     button_estop_clear: 7             # Start
     button_resync: 3                  # Y

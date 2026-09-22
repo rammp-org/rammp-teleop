@@ -102,9 +102,12 @@ Parameters (all nodes): `controller`, `owner_id`, `rate_hz`,
 `xbox.launch.py` starts `joy_node` (ros-humble-joy, SDL) and `xbox_teleop`
 with `config/xbox.yaml`; launch args `params_file`, `controller`, `device_id`.
 Node behaviour, controls and parameters are exactly those of
-`kinova_xbox_teleop` (LB deadman with reseed on press and release, sticks and
-D-pad to base-frame increments, RT/LT gripper, B e-stop, Start clear, Y
-resync, `joint_position` jog mode). Default controller `ee_pose_position`
+`kinova_xbox_teleop` with one change: there is no LB deadman. The
+self-centering sticks are the deadman; the arm moves while any stick, D-pad
+direction or trigger is deflected past the deadzone and holds otherwise, with
+the target re-seeded from the measured state on each deflected/released edge.
+Sticks and D-pad map to base-frame increments, RT/LT gripper, B e-stop, Start
+clear, Y resync, `joint_position` jog mode. Default controller `ee_pose_position`
 at 50 Hz, the tested configuration.
 
 ## Quest

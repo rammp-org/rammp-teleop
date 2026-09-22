@@ -123,7 +123,6 @@ class XboxMap:
     axis_dpad_x: int = 6
     axis_dpad_y: int = 7
 
-    button_deadman: int = 4       # LB: hold to move
     button_estop: int = 1         # B: engage /estop
     button_estop_clear: int = 7   # Start: clear /estop
     button_resync: int = 3        # Y: snap target back to measured state
@@ -132,8 +131,16 @@ class XboxMap:
     def _axis(axes: Sequence[float], idx: int) -> float:
         return float(axes[idx]) if 0 <= idx < len(axes) else 0.0
 
-    def deadman(self, buttons: Sequence[int]) -> bool:
-        return self.pressed(buttons, self.button_deadman)
+    def is_active(self, axes: Sequence[float], deadzone: float) -> bool:
+        """True while any stick, D-pad direction or trigger is deflected past the deadzone.
+
+        The self-centering sticks are the deadman: nothing is commanded at rest.
+        """
+        if not axes:
+            return False
+        linear, angular = self.cartesian_command(axes, deadzone)
+        close, open_ = self.gripper_command(axes)
+        return any(v != 0.0 for v in linear + angular) or close > 0.0 or open_ > 0.0
 
     @staticmethod
     def pressed(buttons: Sequence[int], idx: int) -> bool:

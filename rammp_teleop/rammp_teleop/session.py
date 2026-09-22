@@ -152,7 +152,7 @@ class TeleopNodeBase(Node):
         raise NotImplementedError
 
     def engaged_hint(self) -> str:
-        """Short operator instruction used in log lines, e.g. 'hold LB'."""
+        """Short operator instruction used in log lines, e.g. 'move a stick'."""
         return "engage the input"
 
     # ------------------------------------------------------------------ arm state

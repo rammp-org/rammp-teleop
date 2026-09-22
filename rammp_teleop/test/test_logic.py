@@ -106,11 +106,33 @@ def test_cartesian_command_all_six_dof():
     assert approx(w, (1.0, -1.0, 1.0))
 
 
-def test_deadman_and_edge_buttons():
-    _, buttons = joy(buttons={MAP.button_deadman: 1, MAP.button_estop: 1})
-    assert MAP.deadman(buttons)
+def test_edge_buttons():
+    _, buttons = joy(buttons={MAP.button_estop: 1})
     assert MAP.pressed(buttons, MAP.button_estop)
     assert not MAP.pressed(buttons, MAP.button_estop_clear)
+
+
+def test_is_active_false_at_rest_including_released_triggers():
+    axes, _ = joy()
+    assert not MAP.is_active(axes, deadzone=0.15)
+
+
+def test_is_active_ignores_deflection_inside_deadzone():
+    axes, _ = joy({MAP.axis_left_x: 0.1, MAP.axis_right_y: -0.1})
+    assert not MAP.is_active(axes, deadzone=0.15)
+
+
+def test_is_active_on_stick_dpad_or_trigger():
+    axes, _ = joy({MAP.axis_left_y: 0.5})
+    assert MAP.is_active(axes, deadzone=0.15)
+    axes, _ = joy({MAP.axis_dpad_x: -1.0})
+    assert MAP.is_active(axes, deadzone=0.15)
+    axes, _ = joy({MAP.axis_rt: 0.0})  # trigger half pressed (rest is +1)
+    assert MAP.is_active(axes, deadzone=0.15)
+
+
+def test_is_active_false_when_no_joy_at_all():
+    assert not MAP.is_active([], deadzone=0.15)
 
 
 # ---------------------------------------------------------------- Cartesian integrator

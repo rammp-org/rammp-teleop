@@ -63,8 +63,10 @@ Setpoint QoS is BEST_EFFORT / KEEP_LAST / depth 1. `stream_timeout_s` must excee
 
 ## Xbox controls
 
-Nothing moves unless **LB (deadman) is held**. On every LB press and release the
-target is re-seeded from the measured state, so letting go stops the arm where it is.
+The self-centering sticks are the deadman: the arm moves while a stick, the D-pad
+or a trigger is deflected past the deadzone and holds otherwise. On every
+deflected/released edge the target is re-seeded from the measured state, so letting
+go stops the arm where it is rather than at a leashed target ahead of it.
 
 | Input | `ee_pose_position` (default) | `joint_position` |
 |---|---|---|
@@ -117,7 +119,7 @@ compliant controller).
 | `rate_hz` / `stream_timeout_s` | 50 / 0.2 | publish rate and `open_stream` deadline |
 | `joy_topic` | `/joy` | |
 | `deadzone` | 0.15 | stick deadzone, rescaled so full deflection still gives max speed |
-| `joy_timeout_s` | 0.5 | no `/joy` for this long => sticks neutral, deadman released |
+| `joy_timeout_s` | 0.5 | no `/joy` for this long => sticks read as neutral, arm holds |
 | `max_linear_speed` / `max_angular_speed` | 0.05 m/s / 0.3 rad/s | at full stick |
 | `max_joint_speed` | 0.2 rad/s | joint jog at full stick |
 | `target_lead_m` / `target_lead_rad` | 0.05 / 0.2 | leash: how far the target may lead the measured pose; 0 disables |

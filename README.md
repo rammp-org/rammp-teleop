@@ -4,8 +4,9 @@ Operator-input teleop for the RAMMP Kinova Gen3: an **Xbox pad** and a **Meta
 Quest 3** controller, each a ROS 2 node that drives the arm through
 [`kinova-gen3-ros2`](https://github.com/rammp-org/kinova-gen3-ros2)'s streaming
 tier. The node acquires control, opens a stream on a pose controller, and streams
-an absolute target every tick. Nothing moves until the operator engages, and
-letting go holds the arm where it is.
+an absolute target every tick. Nothing moves until the operator engages (a stick
+deflection on the pad, grip squeeze on the Quest), and letting go holds the arm
+where it is.
 
 | Input | Launch | Controller | Target |
 |---|---|---|---|
