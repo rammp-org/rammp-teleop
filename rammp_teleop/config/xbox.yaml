@@ -1,0 +1,49 @@
+# Parameters for xbox_teleop. Speeds are what FULL stick deflection commands.
+# The driver also rate-limits the reference (--max-ref-speed); if that is lower
+# than what these speeds imply, the target leads the arm and the leash
+# (target_lead_*) is what keeps that lead bounded.
+xbox_teleop:
+  ros__parameters:
+    controller: ee_pose_position      # ee_pose_position | ee_pose_impedance | joint_position | joint_impedance
+    owner_id: xbox_teleop
+    rate_hz: 50.0
+    stream_timeout_s: 0.2             # must exceed 1/rate_hz
+    joy_topic: /joy
+    deadzone: 0.15
+    joy_timeout_s: 0.5                # no /joy for this long => sticks read as neutral
+
+    # --- max speeds ---
+    max_linear_speed: 0.05            # m/s      (pose controllers)
+    max_angular_speed: 0.3            # rad/s    (pose controllers)
+    max_joint_speed: 0.2              # rad/s    (joint controllers)
+
+    # --- leash: max distance the target may lead the measured state; 0 disables ---
+    target_lead_m: 0.05
+    target_lead_rad: 0.2
+    joint_target_lead_rad: 0.1
+
+    # --- gripper (RT closes, LT opens; only while LB held) ---
+    gripper_speed: 1.0                # full travel per second at full trigger
+    gripper_cmd_speed: 0.5            # GripperSetpoint.speed
+    gripper_force: 0.3                # GripperSetpoint.force (current ceiling)
+
+    # --- Xbox Series X layout under ros-humble-joy (verify: ros2 topic echo /joy) ---
+    axis_left_x: 0
+    axis_left_y: 1
+    axis_lt: 2
+    axis_right_x: 3
+    axis_right_y: 4
+    axis_rt: 5
+    axis_dpad_x: 6
+    axis_dpad_y: 7
+    button_deadman: 4                 # LB
+    button_estop: 1                   # B
+    button_estop_clear: 7             # Start
+    button_resync: 3                  # Y
+
+joy_node:
+  ros__parameters:
+    device_id: 0
+    deadzone: 0.05                    # teleop applies its own; keep joy's small
+    autorepeat_rate: 50.0             # steady /joy stream so joy_timeout_s detects a lost pad
+    coalesce_interval_ms: 1
