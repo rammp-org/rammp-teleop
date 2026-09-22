@@ -1,0 +1,11 @@
+.git
+Dockerfile
+.dockerignore
+*.md
+**/__pycache__
+**/*.pyc
+build/
+install/
+log/
+docs/
+.hil.yml

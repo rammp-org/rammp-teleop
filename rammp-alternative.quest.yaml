@@ -1,0 +1,18 @@
+# Meta Quest 3 teleop: quest_reader (adb over USB, needs /dev/bus/usb) plus
+# quest_teleop streaming poses on ee_pose_impedance. r_align in
+# config/quest.yaml is per-session; run quest_calibrate first.
+id: quest_teleop
+tier: experimental
+kind: docker
+container:
+  image: ghcr.io/rammp-org/rammp-teleop:dev
+  network_mode: host
+  ipc: host
+  privileged: true
+  volumes:
+    - /dev:/dev
+  environment:
+    ROS_DOMAIN_ID: "0"
+  command: ros2 launch rammp_teleop quest.launch.py
+publishes: [/setpoint/pose, /setpoint/gripper, /estop, /quest/right/pose, /quest/joy]
+subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status, /control_status]
