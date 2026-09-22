@@ -193,36 +193,44 @@ All declare `publishes: [/setpoint/pose, /setpoint/gripper, /estop]` and
 
 ## Deployment (local, uncommitted)
 
-`~/atdev/rammp-deployments/december_2026/sheppy-manifest.yaml` gains a node:
+`~/atdev/rammp-deployments/december_2026/sheppy-manifest.yaml` gains a machine
+and a node, using sheppy's native `launch_file` kind (which runs
+`exec ros2 launch <package> <file> k:=v` after sourcing the machine's
+`ros_setup`):
 
 ```yaml
+machines:
+  - name: abra
+    host: abra
+    user: abra
+    ros_setup: ~/ros2_ws/install/setup.bash
+
   - name: teleop
-    description: Operator input -> /setpoint/pose and /setpoint/gripper (LOCAL CHECKOUT on abra; do not merge)
+    description: Operator input -> /setpoint/pose and /setpoint/gripper through the arm's streaming tier
     select: single
     alternatives:
       - id: xbox_local
-        kind: process
-        command: "bash -lc 'source /opt/ros/humble/setup.bash && source $HOME/ros2_ws/install/setup.bash && exec ros2 launch rammp_teleop xbox.launch.py'"
+        kind: launch_file
+        machine: abra
+        package: rammp_teleop
+        launch_file: xbox.launch.py
         publishes: [/setpoint/pose, /setpoint/gripper, /estop]
         subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status, /control_status]
-      - id: quest3_local
-        kind: process
-        command: "... exec ros2 launch rammp_teleop quest.launch.py'"
-        ...
-      - id: teleop_off
-        kind: process
-        command: "bash -lc 'sleep infinity'"
-        publishes: []
+      - id: quest3_local        # same, quest.launch.py
+      - id: quest3_mock_local   # same, params: {mock: true} -> mock:=true
 ```
 
 plus `december_2026/profiles/teleop-xbox.yaml` and `teleop-quest.yaml`
-selecting the real arm, planner, cameras, foxglove and the teleop input.
-Sheppy has no local-path mechanism; a `process` command sourcing the
-workspace is the only way, and `process` ignores `params`, so tunables live
-in the package's config files. The docker fragments above replace these
-alternatives once an image is published. The edit is synced to abra's
-`~/rammp-deployments` checkout as a file (abra's tracked tree is clean; the
-change is recoverable with `git checkout`).
+selecting the real arm, planner, cameras, foxglove and the teleop input. A
+profile that does not want teleop simply leaves the node unselected; there is
+no "off" alternative. Sheppy has no local-path mechanism, so sourcing the abra
+workspace through `ros_setup` is how the local checkout is reached; the
+workspace's `install/setup.bash` chains to `/opt/ros/humble`, and sheppyd on
+abra already carries `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp` from the shell
+that started it. The docker fragments above replace these alternatives once an
+image is published. The edit is synced to abra's `~/rammp-deployments` checkout
+as files (abra's tracked tree is clean; the change is recoverable with
+`git checkout`).
 
 `.hil.yml` in this repo syncs the checkout to `abra:~/ros2_ws/src/rammp-teleop`.
 The old `kinova-xbox-teleop` package on abra stays until the new one builds;
