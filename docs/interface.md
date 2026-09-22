@@ -166,7 +166,7 @@ so `r_align_euler_zyx_deg` is a per-session value:
 
 ```bash
 ros2 run rammp_teleop quest_calibrate            # USB
-ros2 run rammp_teleop quest_calibrate --quest-ip 192.168.1.50
+ros2 run rammp_teleop quest_calibrate --quest-ip <quest-ip>
 ```
 
 Move the hand forward, left and up as prompted; paste the printed triple into
