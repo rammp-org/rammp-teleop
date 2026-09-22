@@ -3,8 +3,6 @@ import numpy as np
 from rammp_teleop.quest.pose_source import (
     MockPoseSource,
     OculusPoseSource,
-    Buttons,
-    default_script,
     parse_oculus_sample,
 )
 
@@ -12,20 +10,42 @@ from rammp_teleop.quest.pose_source import (
 # Real capture from a Quest controller (see chat log). Right controller held at
 # rest: thumb up, nothing pressed. Both transforms are proper SO(3) rotations.
 SAMPLE_TRANSFORMS = {
-    "l": np.array([[-0.90386, -0.368162, -0.217932, 0.0979487],
-                   [0.0223743, 0.468015, -0.883437, 0.155136],
-                   [0.427244, -0.803379, -0.414783, 0.0535833],
-                   [0.0, 0.0, 0.0, 1.0]]),
-    "r": np.array([[0.556341, -0.577223, 0.597744, 0.552038],
-                   [0.830682, 0.367931, -0.417844, -0.0277351],
-                   [0.02126, 0.728999, 0.684184, 0.0204228],
-                   [0.0, 0.0, 0.0, 1.0]]),
+    "l": np.array(
+        [
+            [-0.90386, -0.368162, -0.217932, 0.0979487],
+            [0.0223743, 0.468015, -0.883437, 0.155136],
+            [0.427244, -0.803379, -0.414783, 0.0535833],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    ),
+    "r": np.array(
+        [
+            [0.556341, -0.577223, 0.597744, 0.552038],
+            [0.830682, 0.367931, -0.417844, -0.0277351],
+            [0.02126, 0.728999, 0.684184, 0.0204228],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    ),
 }
 SAMPLE_BUTTONS = {
-    "A": False, "B": False, "RThU": True, "RJ": False, "RG": False, "RTr": False,
-    "X": False, "Y": False, "LThU": True, "LJ": False, "LG": False, "LTr": False,
-    "leftJS": (0.0, 0.0), "leftTrig": (0.0,), "leftGrip": (0.0,),
-    "rightJS": (0.0, 0.0), "rightTrig": (0.0,), "rightGrip": (0.0,),
+    "A": False,
+    "B": False,
+    "RThU": True,
+    "RJ": False,
+    "RG": False,
+    "RTr": False,
+    "X": False,
+    "Y": False,
+    "LThU": True,
+    "LJ": False,
+    "LG": False,
+    "LTr": False,
+    "leftJS": (0.0, 0.0),
+    "leftTrig": (0.0,),
+    "leftGrip": (0.0,),
+    "rightJS": (0.0, 0.0),
+    "rightTrig": (0.0,),
+    "rightGrip": (0.0,),
 }
 
 
@@ -43,7 +63,6 @@ class FakeReader:
 
 
 def test_mock_is_deterministic():
-    a = [s.read() for _ in range(50) for s in [MockPoseSource()]]  # fresh each time
     b = MockPoseSource()
     c = MockPoseSource()
     for _ in range(50):
@@ -97,6 +116,7 @@ def test_mock_repeats_last_frame_when_done():
 
 # --- Quest sample parsing --------------------------------------------------
 
+
 def test_parse_returns_raw_right_controller_pose():
     pose, btn = parse_oculus_sample(SAMPLE_TRANSFORMS, SAMPLE_BUTTONS, hand="r")
     assert np.allclose(pose, SAMPLE_TRANSFORMS["r"])  # raw pose, no axis remap
@@ -139,9 +159,11 @@ def test_parse_missing_hand_forces_grip_released_even_if_button_says_held():
 
 # --- OculusPoseSource ------------------------------------------------------
 
+
 def test_oculus_source_reads_pose_and_buttons():
-    src = OculusPoseSource(hand="r", reader=FakeReader([(SAMPLE_TRANSFORMS,
-                                                         SAMPLE_BUTTONS)]))
+    src = OculusPoseSource(
+        hand="r", reader=FakeReader([(SAMPLE_TRANSFORMS, SAMPLE_BUTTONS)])
+    )
     pose, btn = src.read()
     assert pose.shape == (4, 4)
     assert np.allclose(pose, SAMPLE_TRANSFORMS["r"])
@@ -158,13 +180,15 @@ def test_oculus_source_returns_valid_pose_before_any_data():
 
 def test_oculus_source_holds_last_pose_and_freezes_when_tracking_drops():
     held = dict(SAMPLE_BUTTONS, RG=True)  # grip held while tracked
-    reader = FakeReader([
-        (SAMPLE_TRANSFORMS, held),  # tracked + engaged
-        ({}, held),                 # tracking dropped, button stale
-    ])
+    reader = FakeReader(
+        [
+            (SAMPLE_TRANSFORMS, held),  # tracked + engaged
+            ({}, held),  # tracking dropped, button stale
+        ]
+    )
     src = OculusPoseSource(hand="r", reader=reader)
     pose1, btn1 = src.read()
     assert btn1.grip is True
     pose2, btn2 = src.read()
     assert np.allclose(pose2, pose1)  # holds last good pose
-    assert btn2.grip is False         # but releases the clutch -> freeze
+    assert btn2.grip is False  # but releases the clutch -> freeze

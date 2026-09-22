@@ -8,10 +8,10 @@ an absolute target every tick. Nothing moves until the operator engages (a stick
 deflection on the pad, grip squeeze on the Quest), and letting go holds the arm
 where it is.
 
-| Input | Launch | Controller | Target |
-|---|---|---|---|
-| Xbox pad | `ros2 launch rammp_teleop xbox.launch.py` | `ee_pose_position` (stiff) | stick velocities integrated, leashed to the measured pose |
-| Quest 3 | `ros2 launch rammp_teleop quest.launch.py` | `ee_pose_impedance` (compliant) | clutched delta of the controller pose, workspace box, step caps |
+| Input    | Launch                                     | Controller                      | Target                                                          |
+| -------- | ------------------------------------------ | ------------------------------- | --------------------------------------------------------------- |
+| Xbox pad | `ros2 launch rammp_teleop xbox.launch.py`  | `ee_pose_position` (stiff)      | stick velocities integrated, leashed to the measured pose       |
+| Quest 3  | `ros2 launch rammp_teleop quest.launch.py` | `ee_pose_impedance` (compliant) | clutched delta of the controller pose, workspace box, step caps |
 
 Each launch file also starts the device reader (`joy_node` for the pad,
 `quest_reader` for the headset). Full topic, parameter and button reference:
@@ -34,6 +34,7 @@ workspace.
 
 - **Xbox:** `ros-humble-joy` (installed on abra). Plug the pad in; `ros2 topic echo /joy`
   to confirm the axis layout.
+
 - **Quest:** adb and the rail-berkeley reader. git-lfs must be installed **before**
   the clone or the headset APK arrives as a 132-byte pointer and fails silently later.
 

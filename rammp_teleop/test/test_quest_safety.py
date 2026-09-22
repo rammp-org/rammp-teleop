@@ -8,8 +8,11 @@ ID = Rotation.identity()
 
 
 def test_workspace_box_clamps_position():
-    sf = SafetyFilter(SafetyConfig(ws_min=np.array([0.2, -0.4, 0.05]),
-                                   ws_max=np.array([0.75, 0.4, 0.7])))
+    sf = SafetyFilter(
+        SafetyConfig(
+            ws_min=np.array([0.2, -0.4, 0.05]), ws_max=np.array([0.75, 0.4, 0.7])
+        )
+    )
     r = sf.filter([1.5, -2.0, 0.4], ID)
     assert r.clamped_workspace
     assert r.pos[0] == 0.75

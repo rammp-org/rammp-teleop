@@ -47,9 +47,11 @@ def test_magnitude_independent():
     # Only direction matters; gesture length must not change the result.
     R_true = Rotation.from_euler("z", 90.0, degrees=True)
     inv = R_true.inv()
-    R = r_align_from_gestures(fwd=inv.apply([0.23, 0, 0]),
-                              left=inv.apply([0, 0.07, 0]),
-                              up=inv.apply([0, 0, 0.5]))
+    R = r_align_from_gestures(
+        fwd=inv.apply([0.23, 0, 0]),
+        left=inv.apply([0, 0.07, 0]),
+        up=inv.apply([0, 0, 0.5]),
+    )
     assert np.allclose(R.as_matrix(), R_true.as_matrix(), atol=1e-9)
 
 
@@ -60,8 +62,8 @@ def test_run_calibration_captures_grip_windows_and_recovers_rotation():
     frames = []
     for axis in ([1, 0, 0], [0, 1, 0], [0, 0, 1]):  # fwd, left, up
         d = inv.apply(np.asarray(axis) * 0.2)
-        frames.append((p0, True))        # grip rising -> start
-        frames.append((p0 + d, False))   # grip falling -> end, delta = d
+        frames.append((p0, True))  # grip rising -> start
+        frames.append((p0 + d, False))  # grip falling -> end, delta = d
     R = run_calibration(ScriptedSource(frames))
     assert np.allclose(R.as_matrix(), R_true.as_matrix(), atol=1e-9)
 
@@ -69,9 +71,9 @@ def test_run_calibration_captures_grip_windows_and_recovers_rotation():
 def test_noisy_non_orthogonal_gestures_give_a_proper_rotation():
     # Real hand motions aren't perfectly orthogonal; result must still be a
     # valid rotation (orthonormal, det +1), not a skewed matrix.
-    R = r_align_from_gestures(fwd=[1.0, 0.1, -0.05],
-                              left=[-0.08, 1.0, 0.06],
-                              up=[0.04, -0.09, 1.0])
+    R = r_align_from_gestures(
+        fwd=[1.0, 0.1, -0.05], left=[-0.08, 1.0, 0.06], up=[0.04, -0.09, 1.0]
+    )
     M = R.as_matrix()
     assert np.allclose(M @ M.T, np.eye(3), atol=1e-9)
     assert np.isclose(np.linalg.det(M), 1.0, atol=1e-9)

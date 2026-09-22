@@ -19,8 +19,13 @@ from .safety import SafetyConfig, SafetyFilter
 
 
 class QuestCommand:
-    def __init__(self, mapping: MappingConfig, safety: SafetyConfig,
-                 gripper_binary: bool = False, gripper_threshold: float = 0.5):
+    def __init__(
+        self,
+        mapping: MappingConfig,
+        safety: SafetyConfig,
+        gripper_binary: bool = False,
+        gripper_threshold: float = 0.5,
+    ):
         self._mapping_cfg = mapping
         self.mapper = ClutchedDeltaMapper(mapping)
         self.safety = SafetyFilter(safety)
@@ -47,8 +52,9 @@ class QuestCommand:
             return 1.0 if trigger >= self.gripper_threshold else 0.0
         return float(np.clip(trigger, 0.0, 1.0))
 
-    def update(self, ctrl_pose: np.ndarray, grip: bool, ee_pos, ee_rot: Rotation
-               ) -> tuple[np.ndarray, Rotation, bool]:
+    def update(
+        self, ctrl_pose: np.ndarray, grip: bool, ee_pos, ee_rot: Rotation
+    ) -> tuple[np.ndarray, Rotation, bool]:
         if self._reset_safety:
             self.safety.reset(ee_pos, ee_rot)
             self._reset_safety = False

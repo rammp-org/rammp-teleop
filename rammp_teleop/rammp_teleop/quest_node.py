@@ -8,6 +8,7 @@ engages /estop; A re-captures the references.
 Default controller is ee_pose_impedance, the same joint-impedance-with-IK law the
 original UDP setup ran with --joint-impedance.
 """
+
 from __future__ import annotations
 
 import sys
@@ -33,15 +34,19 @@ def _euler_zyx(deg) -> Rotation:
 
 class QuestTeleopNode(TeleopNodeBase):
     def __init__(self) -> None:
-        super().__init__("quest_teleop", default_controller="ee_pose_impedance", default_rate_hz=60.0)
+        super().__init__(
+            "quest_teleop", default_controller="ee_pose_impedance", default_rate_hz=60.0
+        )
         if not self.uses_pose:
-            raise ValueError("quest_teleop streams EE poses; controller must be ee_pose_position or ee_pose_impedance")
+            raise ValueError(
+                "quest_teleop streams EE poses; controller must be ee_pose_position or ee_pose_impedance"
+            )
         dp = self.declare_parameter
         self.hand: str = dp("hand", "right").value
         self.input_timeout_s: float = dp("input_timeout_s", 0.5).value
         self.button_grip: int = dp("button_grip", 0).value
-        self.button_resync: int = dp("button_resync", 1).value      # A
-        self.button_estop: int = dp("button_estop", 2).value        # B
+        self.button_resync: int = dp("button_resync", 1).value  # A
+        self.button_estop: int = dp("button_estop", 2).value  # B
         self.axis_trigger: int = dp("axis_trigger", 0).value
 
         mapping = MappingConfig(
@@ -61,7 +66,8 @@ class QuestTeleopNode(TeleopNodeBase):
             max_ang_step=dp("max_ang_step", 0.05).value,
         )
         self.cmd = QuestCommand(
-            mapping, safety,
+            mapping,
+            safety,
             gripper_binary=dp("gripper_binary", False).value,
             gripper_threshold=dp("gripper_threshold", 0.5).value,
         )
@@ -74,16 +80,22 @@ class QuestTeleopNode(TeleopNodeBase):
         self._trigger = 0.0
         self._last_gripper_sent: Optional[float] = None
 
-        self.create_subscription(PoseStamped, f"/quest/{self.hand}/pose", self._on_pose, 10)
+        self.create_subscription(
+            PoseStamped, f"/quest/{self.hand}/pose", self._on_pose, 10
+        )
         self.create_subscription(Joy, "/quest/joy", self._on_joy, 10)
-        self.get_logger().info("Squeeze GRIP to move. Trigger = gripper, B = e-stop, A = resync.")
+        self.get_logger().info(
+            "Squeeze GRIP to move. Trigger = gripper, B = e-stop, A = resync."
+        )
 
     def engaged_hint(self) -> str:
         return "squeeze the grip"
 
     def _on_pose(self, msg: PoseStamped) -> None:
         p, o = msg.pose.position, msg.pose.orientation
-        self._ctrl_pose = make_pose([p.x, p.y, p.z], Rotation.from_quat([o.x, o.y, o.z, o.w]))
+        self._ctrl_pose = make_pose(
+            [p.x, p.y, p.z], Rotation.from_quat([o.x, o.y, o.z, o.w])
+        )
         self._pose_rx_time = time.monotonic()
 
     def _on_joy(self, msg: Joy) -> None:
@@ -95,7 +107,8 @@ class QuestTeleopNode(TeleopNodeBase):
     def tick_input(self, dt: float) -> bool:
         now = time.monotonic()
         fresh = (
-            self._ctrl_pose is not None and self._joy is not None
+            self._ctrl_pose is not None
+            and self._joy is not None
             and now - self._pose_rx_time <= self.input_timeout_s
             and now - self._joy_rx_time <= self.input_timeout_s
         )
@@ -112,7 +125,11 @@ class QuestTeleopNode(TeleopNodeBase):
         if rising(self.button_resync):
             self.resync("quest A button")
 
-        self._trigger = float(axes[self.axis_trigger]) if 0 <= self.axis_trigger < len(axes) else 0.0
+        self._trigger = (
+            float(axes[self.axis_trigger])
+            if 0 <= self.axis_trigger < len(axes)
+            else 0.0
+        )
         return fresh and XboxMap.pressed(buttons, self.button_grip)
 
     def compute_target(self, dt: float, engaged: bool):
@@ -128,7 +145,10 @@ class QuestTeleopNode(TeleopNodeBase):
         if not engaged:
             return None
         g = self.cmd.gripper(self._trigger)
-        if self._last_gripper_sent is not None and abs(g - self._last_gripper_sent) < 1e-3:
+        if (
+            self._last_gripper_sent is not None
+            and abs(g - self._last_gripper_sent) < 1e-3
+        ):
             return None
         self._last_gripper_sent = g
         return g

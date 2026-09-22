@@ -55,6 +55,7 @@ def euler_zyx_deg(rot: Rotation) -> list[float]:
 
 # --- interactive capture ----------------------------------------------------
 
+
 def _capture_gesture(source, label: str) -> np.ndarray:
     """Wait for a grip-held move and return the controller-frame displacement.
 
@@ -105,8 +106,9 @@ def main(argv=None) -> int:
 
     ap = argparse.ArgumentParser(description="Calibrate R_align from the Quest")
     ap.add_argument("--hand", default="r", choices=["r", "l"])
-    ap.add_argument("--quest-ip", default=None,
-                    help="Quest IP for ADB-over-network (default: USB)")
+    ap.add_argument(
+        "--quest-ip", default=None, help="Quest IP for ADB-over-network (default: USB)"
+    )
     args = ap.parse_args(argv)
 
     source = OculusPoseSource(hand=args.hand, ip_address=args.quest_ip)

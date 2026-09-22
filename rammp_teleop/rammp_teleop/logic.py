@@ -17,6 +17,7 @@ Series X controller over USB, as sampled on abra 2026-09-16:
 
 Quaternions are (x, y, z, w) tuples, matching geometry_msgs/Quaternion.
 """
+
 from __future__ import annotations
 
 import math
@@ -123,9 +124,9 @@ class XboxMap:
     axis_dpad_x: int = 6
     axis_dpad_y: int = 7
 
-    button_estop: int = 1         # B: engage /estop
-    button_estop_clear: int = 7   # Start: clear /estop
-    button_resync: int = 3        # Y: snap target back to measured state
+    button_estop: int = 1  # B: engage /estop
+    button_estop_clear: int = 7  # Start: clear /estop
+    button_resync: int = 3  # Y: snap target back to measured state
 
     @staticmethod
     def _axis(axes: Sequence[float], idx: int) -> float:
@@ -146,7 +147,9 @@ class XboxMap:
     def pressed(buttons: Sequence[int], idx: int) -> bool:
         return 0 <= idx < len(buttons) and buttons[idx] != 0
 
-    def cartesian_command(self, axes: Sequence[float], deadzone: float) -> Tuple[Vec3, Vec3]:
+    def cartesian_command(
+        self, axes: Sequence[float], deadzone: float
+    ) -> Tuple[Vec3, Vec3]:
         """Normalized (linear, angular) command in the base frame, each in [-1, 1].
 
         left stick Y  -> +x (forward)     right stick X -> +yaw (about +z, left = CCW)
@@ -173,7 +176,9 @@ class XboxMap:
 
     def gripper_command(self, axes: Sequence[float]) -> Tuple[float, float]:
         """(close, open) amounts in 0..1 from RT and LT."""
-        return trigger_amount(self._axis(axes, self.axis_rt)), trigger_amount(self._axis(axes, self.axis_lt))
+        return trigger_amount(self._axis(axes, self.axis_rt)), trigger_amount(
+            self._axis(axes, self.axis_lt)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +190,9 @@ class XboxMap:
 
 
 class CartesianIntegrator:
-    def __init__(self, max_linear: float, max_angular: float, lead_m: float, lead_rad: float):
+    def __init__(
+        self, max_linear: float, max_angular: float, lead_m: float, lead_rad: float
+    ):
         self.max_linear = max_linear
         self.max_angular = max_angular
         self.lead_m = lead_m
@@ -197,9 +204,13 @@ class CartesianIntegrator:
         self.position = tuple(position)  # type: ignore[assignment]
         self.orientation = quat_normalize(tuple(orientation))  # type: ignore[arg-type]
 
-    def step(self, linear: Vec3, angular: Vec3, dt: float, actual_p: Vec3, actual_q: Quat) -> None:
+    def step(
+        self, linear: Vec3, angular: Vec3, dt: float, actual_p: Vec3, actual_q: Quat
+    ) -> None:
         p = [self.position[i] + linear[i] * self.max_linear * dt for i in range(3)]
-        dq = quat_from_rotvec(tuple(angular[i] * self.max_angular * dt for i in range(3)))  # type: ignore[arg-type]
+        dq = quat_from_rotvec(
+            tuple(angular[i] * self.max_angular * dt for i in range(3))
+        )  # type: ignore[arg-type]
         q = quat_normalize(quat_mul(dq, self.orientation))  # world-frame increment
 
         # Leash the position.

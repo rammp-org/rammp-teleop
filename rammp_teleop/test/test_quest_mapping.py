@@ -55,8 +55,9 @@ def test_rotation_does_not_move_position_decoupled():
 
 def test_R_align_rotates_translation_axis():
     # R_align maps controller +x onto base +y.
-    cfg = MappingConfig(trans_smooth=1.0,
-                        R_align=Rotation.from_euler("z", 90, degrees=True))
+    cfg = MappingConfig(
+        trans_smooth=1.0, R_align=Rotation.from_euler("z", 90, degrees=True)
+    )
     m = ClutchedDeltaMapper(cfg)
     engage(m, [0, 0, 0])
     r = None
@@ -104,12 +105,14 @@ def test_reengage_recaptures_reference():
 
 # --- rotation frame ---------------------------------------------------------
 
+
 def _tool_cfg(**kw):
     return MappingConfig(trans_smooth=1.0, rot_smooth=1.0, rot_frame="tool", **kw)
 
 
 def test_rot_frame_is_validated():
     import pytest
+
     with pytest.raises(ValueError):
         MappingConfig(rot_frame="wrist")
 
@@ -131,14 +134,16 @@ def test_tool_frame_with_engage_offset_matches_base_frame():
     R_tool = EE_REF_ROT.inv() * (R_align * ctrl_ref)
 
     base = ClutchedDeltaMapper(
-        MappingConfig(trans_smooth=1.0, rot_smooth=1.0, R_align=R_align))
+        MappingConfig(trans_smooth=1.0, rot_smooth=1.0, R_align=R_align)
+    )
     tool = ClutchedDeltaMapper(_tool_cfg(R_align=R_align, R_tool=R_tool))
     engage(base, [0, 0, 0], ctrl_ref)
     engage(tool, [0, 0, 0], ctrl_ref)
 
     for deg in np.linspace(4, 20, 5):
-        rot = ctrl_ref * Rotation.from_euler("xyz", [deg, deg / 2, -deg / 3],
-                                             degrees=True)
+        rot = ctrl_ref * Rotation.from_euler(
+            "xyz", [deg, deg / 2, -deg / 3], degrees=True
+        )
         rb = base.update(ctrl([0, 0, 0], rot), True, EE_REF_POS, EE_REF_ROT)
         rt = tool.update(ctrl([0, 0, 0], rot), True, EE_REF_POS, EE_REF_ROT)
         assert angle_between(rb.rot, rt.rot) < 1e-9
@@ -173,7 +178,8 @@ def test_tool_frame_rotation_ignores_R_align():
     # longer corrupt rotation -- one fewer coupled knob to get wrong.
     a = ClutchedDeltaMapper(_tool_cfg(R_align=Rotation.identity()))
     b = ClutchedDeltaMapper(
-        _tool_cfg(R_align=Rotation.from_euler("xyz", [15, 40, -25], degrees=True)))
+        _tool_cfg(R_align=Rotation.from_euler("xyz", [15, 40, -25], degrees=True))
+    )
     engage(a, [0, 0, 0])
     engage(b, [0, 0, 0])
     rot = Rotation.from_euler("xyz", [12, -8, 20], degrees=True)

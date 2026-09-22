@@ -33,8 +33,8 @@ class MappingConfig:
     trans_smooth: float = 0.5
     rot_smooth: float = 0.5
     # Per-tick controller jump rejection (a glitch/teleport guard).
-    jump_pos_tol: float = 0.05    # meters of controller motion per tick
-    jump_rot_tol: float = 0.5     # radians of controller rotation per tick
+    jump_pos_tol: float = 0.05  # meters of controller motion per tick
+    jump_rot_tol: float = 0.5  # radians of controller rotation per tick
     # Optional scaling of controller motion -> EE motion.
     pos_scale: float = 1.0
     # Frame the ROTATION delta acts in. Position is always base frame.
@@ -64,15 +64,16 @@ class MappingConfig:
             self.R_tool = Rotation.identity()
         if self.rot_frame not in ("base", "tool"):
             raise ValueError(
-                f"rot_frame must be 'base' or 'tool', got {self.rot_frame!r}")
+                f"rot_frame must be 'base' or 'tool', got {self.rot_frame!r}"
+            )
 
 
 @dataclass
 class MapResult:
-    pos: np.ndarray            # target EE position, base frame
-    rot: Rotation              # target EE rotation, base frame
-    engaged: bool              # clutch currently held
-    rejected: bool = False     # this tick's controller sample was a jump
+    pos: np.ndarray  # target EE position, base frame
+    rot: Rotation  # target EE rotation, base frame
+    engaged: bool  # clutch currently held
+    rejected: bool = False  # this tick's controller sample was a jump
 
 
 class ClutchedDeltaMapper:
@@ -102,8 +103,9 @@ class ClutchedDeltaMapper:
         self._cmd_pos = self._ee_ref_pos.copy()
         self._cmd_rot = ee_rot
 
-    def update(self, ctrl_pose: np.ndarray, grip: bool,
-               ee_pos, ee_rot: Rotation) -> MapResult:
+    def update(
+        self, ctrl_pose: np.ndarray, grip: bool, ee_pos, ee_rot: Rotation
+    ) -> MapResult:
         """Advance the mapping one tick.
 
         ``ctrl_pose`` is the controller's 4x4 pose (its own frame). ``ee_pos`` /
@@ -136,8 +138,9 @@ class ClutchedDeltaMapper:
         if d_pos > self.cfg.jump_pos_tol or d_ang > self.cfg.jump_rot_tol:
             # Reject this sample; hold command, keep the last accepted baseline
             # so we resume only when the controller returns near it.
-            return MapResult(self._cmd_pos.copy(), self._cmd_rot,
-                             engaged=True, rejected=True)
+            return MapResult(
+                self._cmd_pos.copy(), self._cmd_rot, engaged=True, rejected=True
+            )
 
         # --- decoupled delta in base frame ----------------------------------
         R = self.cfg.R_align

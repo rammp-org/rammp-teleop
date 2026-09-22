@@ -28,37 +28,39 @@
   - TEMPLATE = `/home/swapnil/atdev/rammp-module-template`
   - DEPLOY = `/home/swapnil/atdev/rammp-deployments`
 
----
+______________________________________________________________________
 
 ## File map
 
-| Path | Responsibility |
-|---|---|
-| `rammp_teleop/package.xml`, `setup.py`, `setup.cfg`, `resource/rammp_teleop` | ament_python packaging, four console scripts |
-| `rammp_teleop/rammp_teleop/logic.py` | deadzone, xyzw quaternion helpers, `XboxMap`, `CartesianIntegrator`, `JointIntegrator`, `GripperIntegrator` (verbatim from XBOX `teleop_logic.py`) |
-| `rammp_teleop/rammp_teleop/session.py` | `TeleopNodeBase`, `pose_msg`, `run` |
-| `rammp_teleop/rammp_teleop/xbox_node.py` | `XboxTeleopNode` |
-| `rammp_teleop/rammp_teleop/quest/{transforms,mapping,safety,pose_source,scenarios,calibrate}.py` | verbatim ports from QUEST |
-| `rammp_teleop/rammp_teleop/quest/command.py` | `QuestCommand`: mapper -> safety -> hold, no ROS |
-| `rammp_teleop/rammp_teleop/quest_reader.py` | `QuestReaderNode`: headset -> `/quest/<hand>/pose` + `/quest/joy` |
-| `rammp_teleop/rammp_teleop/quest_node.py` | `QuestTeleopNode` |
-| `rammp_teleop/launch/xbox.launch.py`, `quest.launch.py` | input node + teleop node |
-| `rammp_teleop/config/xbox.yaml`, `quest.yaml` | parameters |
-| `rammp_teleop/test/*.py` | pure-logic tests, no ROS |
-| `Dockerfile`, `.dockerignore`, `rammp-alternative.*.yaml`, `Makefile`, `scripts/`, `tests/`, `.github/`, `.pre-commit-config.yaml` | RAMMP module scaffolding |
-| `docs/interface.md`, `docs/index.mdx`, `docs/_meta.js`, `README.md` | docs |
-| `.hil.yml`, `.gitignore` | sync to abra, ignores |
-| DEPLOY `december_2026/sheppy-manifest.yaml`, `december_2026/profiles/teleop-*.yaml` | local, uncommitted deployment edit |
+| Path                                                                                                                               | Responsibility                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rammp_teleop/package.xml`, `setup.py`, `setup.cfg`, `resource/rammp_teleop`                                                       | ament_python packaging, four console scripts                                                                                                       |
+| `rammp_teleop/rammp_teleop/logic.py`                                                                                               | deadzone, xyzw quaternion helpers, `XboxMap`, `CartesianIntegrator`, `JointIntegrator`, `GripperIntegrator` (verbatim from XBOX `teleop_logic.py`) |
+| `rammp_teleop/rammp_teleop/session.py`                                                                                             | `TeleopNodeBase`, `pose_msg`, `run`                                                                                                                |
+| `rammp_teleop/rammp_teleop/xbox_node.py`                                                                                           | `XboxTeleopNode`                                                                                                                                   |
+| `rammp_teleop/rammp_teleop/quest/{transforms,mapping,safety,pose_source,scenarios,calibrate}.py`                                   | verbatim ports from QUEST                                                                                                                          |
+| `rammp_teleop/rammp_teleop/quest/command.py`                                                                                       | `QuestCommand`: mapper -> safety -> hold, no ROS                                                                                                   |
+| `rammp_teleop/rammp_teleop/quest_reader.py`                                                                                        | `QuestReaderNode`: headset -> `/quest/<hand>/pose` + `/quest/joy`                                                                                  |
+| `rammp_teleop/rammp_teleop/quest_node.py`                                                                                          | `QuestTeleopNode`                                                                                                                                  |
+| `rammp_teleop/launch/xbox.launch.py`, `quest.launch.py`                                                                            | input node + teleop node                                                                                                                           |
+| `rammp_teleop/config/xbox.yaml`, `quest.yaml`                                                                                      | parameters                                                                                                                                         |
+| `rammp_teleop/test/*.py`                                                                                                           | pure-logic tests, no ROS                                                                                                                           |
+| `Dockerfile`, `.dockerignore`, `rammp-alternative.*.yaml`, `Makefile`, `scripts/`, `tests/`, `.github/`, `.pre-commit-config.yaml` | RAMMP module scaffolding                                                                                                                           |
+| `docs/interface.md`, `docs/index.mdx`, `docs/_meta.js`, `README.md`                                                                | docs                                                                                                                                               |
+| `.hil.yml`, `.gitignore`                                                                                                           | sync to abra, ignores                                                                                                                              |
+| DEPLOY `december_2026/sheppy-manifest.yaml`, `december_2026/profiles/teleop-*.yaml`                                                | local, uncommitted deployment edit                                                                                                                 |
 
----
+______________________________________________________________________
 
 ### Task 1: Package skeleton and Xbox logic port
 
 **Files:**
+
 - Create: `rammp_teleop/package.xml`, `rammp_teleop/setup.py`, `rammp_teleop/setup.cfg`, `rammp_teleop/resource/rammp_teleop`, `rammp_teleop/rammp_teleop/__init__.py`, `rammp_teleop/rammp_teleop/logic.py`, `.gitignore`
 - Test: `rammp_teleop/test/test_logic.py`
 
 **Interfaces:**
+
 - Produces: `rammp_teleop.logic` with `apply_deadzone`, `trigger_amount`, `clamp`, `quat_normalize`, `quat_mul`, `quat_conj`, `quat_from_rotvec`, `quat_to_rotvec`, `quat_angle`, `XboxMap` (fields `axis_left_x..axis_dpad_y`, `button_deadman`, `button_estop`, `button_estop_clear`, `button_resync`; methods `deadman(buttons)`, `pressed(buttons, idx)`, `cartesian_command(axes, deadzone) -> (Vec3, Vec3)`, `joint_jog_command(axes, deadzone) -> float`, `joint_select_step(axes) -> int`, `gripper_command(axes) -> (close, open)`), `CartesianIntegrator(max_linear, max_angular, lead_m, lead_rad)` with `.position`, `.orientation`, `reset(p, q)`, `step(lin, ang, dt, actual_p, actual_q)`, `JointIntegrator(max_speed, lead_rad)` with `.positions`, `.selected`, `reset`, `select_next(step)`, `step(rate, dt, actual)`, `GripperIntegrator(speed)` with `.position`, `reset`, `step(close, open, dt) -> bool`.
 
 - [ ] **Step 1: Create the package files**
@@ -185,15 +187,17 @@ git add .gitignore rammp_teleop
 git commit -m "feat: rammp_teleop package skeleton with the Xbox logic port"
 ```
 
----
+______________________________________________________________________
 
 ### Task 2: Quest pure-module port
 
 **Files:**
+
 - Create: `rammp_teleop/rammp_teleop/quest/__init__.py`, `transforms.py`, `mapping.py`, `safety.py`, `pose_source.py`, `scenarios.py`, `calibrate.py`
 - Test: `rammp_teleop/test/test_quest_transforms.py`, `test_quest_mapping.py`, `test_quest_safety.py`, `test_quest_pose_source.py`, `test_quest_calibrate.py`, `test_quest_scenarios_build.py`
 
 **Interfaces:**
+
 - Produces (unchanged from QUEST): `MappingConfig(R_align, trans_smooth, rot_smooth, jump_pos_tol, jump_rot_tol, pos_scale, rot_frame, R_tool)`, `ClutchedDeltaMapper(cfg).update(ctrl_pose_4x4, grip, ee_pos, ee_rot) -> MapResult(pos, rot, engaged, rejected)`, `SafetyConfig(ws_min, ws_max, max_lin_step, max_ang_step)`, `SafetyFilter(cfg).filter(pos, rot) -> SafetyResult(pos, rot, clamped_velocity, clamped_workspace)`, `SafetyFilter.reset(pos, rot)`, `Buttons(grip, trigger, extra)`, `MockPoseSource(script).read() -> (pose4x4, Buttons)`, `MockPoseSource.done`, `MockPoseSource.reset()`, `default_script(dt)`, `parse_oculus_sample(transforms, buttons, hand) -> (pose|None, Buttons)`, `OculusPoseSource(hand, reader=None, ip_address=None)`, `scenarios.get(name, dt)`, `scenarios.SCENARIOS`, `calibrate.main`, `make_pose(pos, rot)`, `slerp_rotation`, `angle_between`.
 
 - [ ] **Step 1: Copy the modules and tests**
@@ -263,16 +267,19 @@ git add rammp_teleop
 git commit -m "feat: port Quest mapping, safety, pose source, scenarios and calibration"
 ```
 
----
+______________________________________________________________________
 
 ### Task 3: `QuestCommand` (the loop's tick without a driver)
 
 **Files:**
+
 - Create: `rammp_teleop/rammp_teleop/quest/command.py`
 - Test: `rammp_teleop/test/test_quest_command.py`
 
 **Interfaces:**
+
 - Consumes: Task 2 classes.
+
 - Produces: `QuestCommand(mapping: MappingConfig, safety: SafetyConfig, gripper_binary: bool = False, gripper_threshold: float = 0.5)` with `update(ctrl_pose, grip, ee_pos, ee_rot) -> tuple[np.ndarray, Rotation, bool]` (target pos, target rot, engaged), `gripper(trigger: float) -> float`, `resync()`, `stats: dict` with keys `rejected`, `vel_clamped`, `ws_clamped`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -487,15 +494,18 @@ git add rammp_teleop
 git commit -m "feat: QuestCommand, the teleop tick without a driver"
 ```
 
----
+______________________________________________________________________
 
 ### Task 4: `TeleopNodeBase` and the Xbox node
 
 **Files:**
+
 - Create: `rammp_teleop/rammp_teleop/session.py`, `rammp_teleop/rammp_teleop/xbox_node.py`, `rammp_teleop/config/xbox.yaml`, `rammp_teleop/launch/xbox.launch.py`
 
 **Interfaces:**
+
 - Consumes: Task 1 `logic`.
+
 - Produces: `TeleopNodeBase(Node)` constructor `__init__(self, name: str, *, default_controller: str, default_rate_hz: float)`; subclass hooks `tick_input(dt) -> bool` (consume input, handle buttons, return engaged), `compute_target(dt, engaged) -> Pose | Sequence[float] | None`, `gripper_target(dt, engaged) -> float | None`, `seed_from_state() -> None`; services for subclasses `ee_pose() -> tuple[Vec3, Quat] | None`, `joint_positions() -> list | None`, `gripper_position() -> float | None`, `resync(why)`, `publish_estop(engaged, reason)`, `publish_gripper(position)`, attribute `uses_pose: bool`; module functions `pose_msg(pos, quat_xyzw) -> Pose` and `run(node_factory) -> int`.
 
 - [ ] **Step 1: Write `session.py`**
@@ -1226,16 +1236,19 @@ git add rammp_teleop
 git commit -m "feat: TeleopNodeBase session plumbing and the Xbox node"
 ```
 
----
+______________________________________________________________________
 
 ### Task 5: Quest reader and Quest teleop nodes
 
 **Files:**
+
 - Create: `rammp_teleop/rammp_teleop/quest_reader.py`, `rammp_teleop/rammp_teleop/quest_node.py`, `rammp_teleop/config/quest.yaml`, `rammp_teleop/launch/quest.launch.py`
 - Test: `rammp_teleop/test/test_quest_reader_encode.py`
 
 **Interfaces:**
+
 - Consumes: Task 3 `QuestCommand`, Task 2 `MockPoseSource`, `OculusPoseSource`, `default_script`, `make_pose`; Task 4 `TeleopNodeBase`, `pose_msg`, `run`.
+
 - Produces: `quest_reader.encode_sample(pose4x4, buttons: Buttons, hand: str) -> tuple[tuple[Vec3, Quat], list[float], list[int]]` (position+xyzw quaternion, Joy axes `[trigger]`, Joy buttons `[grip, A, B]`), pure and tested; topics `/quest/<hand>/pose` (`geometry_msgs/PoseStamped`) and `/quest/joy` (`sensor_msgs/Joy`).
 
 - [ ] **Step 1: Write the failing encode test**
@@ -1661,15 +1674,18 @@ git add rammp_teleop
 git commit -m "feat: Quest reader and Quest teleop nodes with launch and config"
 ```
 
----
+______________________________________________________________________
 
 ### Task 6: Build, test and smoke on abra
 
 **Files:**
+
 - Create: `.hil.yml`
 
 **Interfaces:**
+
 - Consumes: everything above.
+
 - Produces: a built `rammp_teleop` in `abra:~/ros2_ws/install`.
 
 - [ ] **Step 1: Add `.hil.yml` and sync**
@@ -1740,11 +1756,12 @@ git add .hil.yml
 git commit -m "chore: hil sync target for abra"
 ```
 
----
+______________________________________________________________________
 
 ### Task 7: RAMMP module scaffolding (Dockerfile, fragments, Makefile, CI)
 
 **Files:**
+
 - Create: `Dockerfile`, `.dockerignore`, `rammp-alternative.xbox.yaml`, `rammp-alternative.quest.yaml`, `rammp-alternative.quest-mock.yaml`, `Makefile`, `scripts/validate_fragment.py`, `scripts/smoke.sh`, `tests/test_validate_fragment.py`, `.pre-commit-config.yaml`, `.github/workflows/build.yml`, `.github/workflows/lint.yml`, `CONTRIBUTING.md`
 
 - [ ] **Step 1: Copy the template tooling verbatim**
@@ -1925,8 +1942,11 @@ lint:
 ```
 
 `.github/workflows/build.yml`: copy `TEMPLATE/.github/workflows/build.yml`, then make these edits:
+
 - in job `fragment`, replace `pip install pyyaml pytest` with `pip install pyyaml pytest numpy scipy` and `pytest tests -v` with `pytest tests -v && (cd rammp_teleop && python -m pytest test -v)`;
+
 - job `smoke`: `runs-on: ubuntu-22.04-arm` (rammp-base is arm64 only);
+
 - job `publish`: `runs-on: ubuntu-22.04-arm`, remove the `setup-qemu-action` step, and set `platforms: linux/arm64`.
 
 - [ ] **Step 5: Validate**
@@ -1946,11 +1966,12 @@ git add Dockerfile .dockerignore rammp-alternative.*.yaml Makefile scripts tests
 git commit -m "chore: RAMMP module scaffolding (Dockerfile, fragments, Makefile, CI); image not yet built"
 ```
 
----
+______________________________________________________________________
 
 ### Task 8: Docs and README
 
 **Files:**
+
 - Create: `README.md`, `docs/index.mdx`, `docs/_meta.js`, `docs/interface.md`
 
 - [ ] **Step 1: Write the docs**
@@ -2014,12 +2035,14 @@ git add README.md docs
 git commit -m "docs: README and interface reference for the Xbox and Quest nodes"
 ```
 
----
+______________________________________________________________________
 
 ### Task 9: Local sheppy manifest edit and profiles
 
 **Files:**
+
 - Modify: DEPLOY `december_2026/sheppy-manifest.yaml` (append a node; uncommitted)
+
 - Create: DEPLOY `december_2026/profiles/teleop-xbox.yaml`, `december_2026/profiles/teleop-quest.yaml` (uncommitted)
 
 - [ ] **Step 1: Append the teleop node to the manifest**
@@ -2145,7 +2168,7 @@ Expected: the manifest diff, both profiles present, the teleop node found. Do **
 
 No commit: this edit is intentionally uncommitted in DEPLOY.
 
----
+______________________________________________________________________
 
 ### Task 10: Final verification and handoff
 

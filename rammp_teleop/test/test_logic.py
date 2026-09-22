@@ -1,4 +1,5 @@
 """Pure-Python tests for the teleop mapping and integrators. No ROS needed."""
+
 import math
 
 import pytest
@@ -93,11 +94,11 @@ def test_cartesian_command_full_forward_stick():
 def test_cartesian_command_all_six_dof():
     axes, _ = joy(
         {
-            MAP.axis_left_y: 0.5,   # +x
+            MAP.axis_left_y: 0.5,  # +x
             MAP.axis_left_x: -1.0,  # -y
             MAP.axis_right_y: 1.0,  # +z
             MAP.axis_right_x: 1.0,  # +yaw
-            MAP.axis_dpad_y: 1.0,   # nose up = -pitch
+            MAP.axis_dpad_y: 1.0,  # nose up = -pitch
             MAP.axis_dpad_x: -1.0,  # D-pad right = +roll
         }
     )
@@ -139,41 +140,83 @@ def test_is_active_false_when_no_joy_at_all():
 
 
 def test_cartesian_integrator_translates_at_max_speed():
-    integ = CartesianIntegrator(max_linear=0.1, max_angular=1.0, lead_m=10.0, lead_rad=10.0)
+    integ = CartesianIntegrator(
+        max_linear=0.1, max_angular=1.0, lead_m=10.0, lead_rad=10.0
+    )
     integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
-    integ.step((1.0, 0.0, 0.0), (0.0, 0.0, 0.0), dt=0.5, actual_p=(0.0, 0.0, 0.0), actual_q=(0.0, 0.0, 0.0, 1.0))
+    integ.step(
+        (1.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+        dt=0.5,
+        actual_p=(0.0, 0.0, 0.0),
+        actual_q=(0.0, 0.0, 0.0, 1.0),
+    )
     assert approx(integ.position, (0.05, 0.0, 0.0))
 
 
 def test_cartesian_integrator_rotates_about_world_z():
-    integ = CartesianIntegrator(max_linear=0.1, max_angular=1.0, lead_m=10.0, lead_rad=10.0)
+    integ = CartesianIntegrator(
+        max_linear=0.1, max_angular=1.0, lead_m=10.0, lead_rad=10.0
+    )
     integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
-    integ.step((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), dt=0.2, actual_p=(0.0, 0.0, 0.0), actual_q=(0.0, 0.0, 0.0, 1.0))
+    integ.step(
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0),
+        dt=0.2,
+        actual_p=(0.0, 0.0, 0.0),
+        actual_q=(0.0, 0.0, 0.0, 1.0),
+    )
     assert approx(integ.orientation, quat_from_rotvec((0.0, 0.0, 0.2)), tol=1e-9)
 
 
 def test_cartesian_leash_caps_position_lead():
-    integ = CartesianIntegrator(max_linear=1.0, max_angular=1.0, lead_m=0.05, lead_rad=10.0)
+    integ = CartesianIntegrator(
+        max_linear=1.0, max_angular=1.0, lead_m=0.05, lead_rad=10.0
+    )
     integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
     for _ in range(10):
-        integ.step((1.0, 0.0, 0.0), (0.0, 0.0, 0.0), dt=0.1, actual_p=(0.0, 0.0, 0.0), actual_q=(0.0, 0.0, 0.0, 1.0))
+        integ.step(
+            (1.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            dt=0.1,
+            actual_p=(0.0, 0.0, 0.0),
+            actual_q=(0.0, 0.0, 0.0, 1.0),
+        )
     assert approx(integ.position, (0.05, 0.0, 0.0))
 
 
 def test_cartesian_leash_caps_orientation_lead():
-    integ = CartesianIntegrator(max_linear=1.0, max_angular=1.0, lead_m=10.0, lead_rad=0.1)
+    integ = CartesianIntegrator(
+        max_linear=1.0, max_angular=1.0, lead_m=10.0, lead_rad=0.1
+    )
     integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
     for _ in range(10):
-        integ.step((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), dt=0.1, actual_p=(0.0, 0.0, 0.0), actual_q=(0.0, 0.0, 0.0, 1.0))
+        integ.step(
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0),
+            dt=0.1,
+            actual_p=(0.0, 0.0, 0.0),
+            actual_q=(0.0, 0.0, 0.0, 1.0),
+        )
     assert quat_angle(integ.orientation, (0.0, 0.0, 0.0, 1.0)) == pytest.approx(0.1)
 
 
 def test_cartesian_orientation_stays_normalized():
-    integ = CartesianIntegrator(max_linear=1.0, max_angular=2.0, lead_m=10.0, lead_rad=10.0)
+    integ = CartesianIntegrator(
+        max_linear=1.0, max_angular=2.0, lead_m=10.0, lead_rad=10.0
+    )
     integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
     for _ in range(500):
-        integ.step((0.0, 0.0, 0.0), (0.3, -0.7, 0.2), dt=0.02, actual_p=(0.0, 0.0, 0.0), actual_q=integ.orientation)
-    assert math.sqrt(sum(c * c for c in integ.orientation)) == pytest.approx(1.0, abs=1e-9)
+        integ.step(
+            (0.0, 0.0, 0.0),
+            (0.3, -0.7, 0.2),
+            dt=0.02,
+            actual_p=(0.0, 0.0, 0.0),
+            actual_q=integ.orientation,
+        )
+    assert math.sqrt(sum(c * c for c in integ.orientation)) == pytest.approx(
+        1.0, abs=1e-9
+    )
 
 
 # ---------------------------------------------------------------- Joint integrator

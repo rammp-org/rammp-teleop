@@ -1,4 +1,5 @@
 """Every scripted scenario builds and has the shape MockPoseSource expects."""
+
 import numpy as np
 import pytest
 

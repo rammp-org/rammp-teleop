@@ -10,6 +10,7 @@ forever, so the whole pipeline runs with no headset and no adb.
 The ROS imports live inside ``main`` so ``encode_sample`` stays testable on a
 host without rclpy.
 """
+
 from __future__ import annotations
 
 import sys
@@ -36,9 +37,13 @@ def encode_sample(pose: np.ndarray, btn: Buttons, hand: str):
 def _build_source(hand: str, quest_ip: str, mock: bool):
     if mock:
         return MockPoseSource(default_script())
-    from rammp_teleop.quest.pose_source import OculusPoseSource  # imports oculus_reader (needs adb)
+    from rammp_teleop.quest.pose_source import (
+        OculusPoseSource,
+    )  # imports oculus_reader (needs adb)
 
-    return OculusPoseSource(hand="r" if hand == "right" else "l", ip_address=quest_ip or None)
+    return OculusPoseSource(
+        hand="r" if hand == "right" else "l", ip_address=quest_ip or None
+    )
 
 
 def main(argv=None) -> int:
@@ -59,7 +64,9 @@ def main(argv=None) -> int:
             if self.hand not in ("right", "left"):
                 raise ValueError(f"hand must be 'right' or 'left', got {self.hand!r}")
             self.source = _build_source(self.hand, self.quest_ip, self.mock)
-            self._pose_pub = self.create_publisher(PoseStamped, f"/quest/{self.hand}/pose", 10)
+            self._pose_pub = self.create_publisher(
+                PoseStamped, f"/quest/{self.hand}/pose", 10
+            )
             self._joy_pub = self.create_publisher(Joy, "/quest/joy", 10)
             self.create_timer(1.0 / self.rate_hz, self._tick)
             self.get_logger().info(
@@ -78,7 +85,12 @@ def main(argv=None) -> int:
             ps.header.stamp = stamp
             ps.header.frame_id = self.frame_id
             ps.pose.position.x, ps.pose.position.y, ps.pose.position.z = pos
-            ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w = quat
+            (
+                ps.pose.orientation.x,
+                ps.pose.orientation.y,
+                ps.pose.orientation.z,
+                ps.pose.orientation.w,
+            ) = quat
             self._pose_pub.publish(ps)
 
             joy = Joy()

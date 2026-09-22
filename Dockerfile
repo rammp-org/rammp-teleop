@@ -17,6 +17,10 @@ RUN apt-get update \
 RUN git clone --depth 1 https://github.com/rail-berkeley/oculus_reader.git /opt/oculus_reader \
  && pip3 install --no-cache-dir -e /opt/oculus_reader
 
+# rammp-base ships rosdep uninitialised; the index must exist before
+# `rosdep install` below can resolve package.xml keys.
+RUN rosdep update --rosdistro humble
+
 WORKDIR /module_ws
 COPY . /module_ws/src/rammp-teleop/
 

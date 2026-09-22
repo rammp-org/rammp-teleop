@@ -73,16 +73,16 @@ Extracted from `XboxTeleopNode` with behaviour unchanged:
 
 1. wait for `/ee_state` (or `/joint_states` for `joint_position`), timeout
    `state_wait_timeout_s`;
-2. `/acquire_control(owner_id)` -> token (seizes; documented);
-3. `/list_controllers` -> confirm `controller` available, take its channel;
-4. create the setpoint publisher (`PoseSetpoint` or `JointSetpoint`) with
+1. `/acquire_control(owner_id)` -> token (seizes; documented);
+1. `/list_controllers` -> confirm `controller` available, take its channel;
+1. create the setpoint publisher (`PoseSetpoint` or `JointSetpoint`) with
    BEST_EFFORT/KEEP_LAST/1, wait up to 3 s for a subscriber;
-5. `/open_stream(controller, stream_timeout_s, token)`;
-6. timer at `rate_hz` calls `tick(dt)`; the subclass returns the target
+1. `/open_stream(controller, stream_timeout_s, token)`;
+1. timer at `rate_hz` calls `tick(dt)`; the subclass returns the target
    (`Pose` or joint list, or `None` to publish nothing this tick); the base
    publishes it with the token every tick, including while the input is
    idle, so the session stays alive and the arm holds;
-7. shutdown (`SIGINT`/`SIGTERM`, own handler): `/close_stream`,
+1. shutdown (`SIGINT`/`SIGTERM`, own handler): `/close_stream`,
    `/release_control`.
 
 Also in the base: `/control_status` and `/stream_status` watching with the
@@ -138,16 +138,16 @@ Subscribes to the two topics above plus the arm state. Each tick at
 `rate_hz` (60):
 
 1. if the pose is older than `input_timeout_s`, grip is treated as released;
-2. `ClutchedDeltaMapper.update(ctrl_pose, grip, ee_pos, ee_rot)` with the
+1. `ClutchedDeltaMapper.update(ctrl_pose, grip, ee_pos, ee_rot)` with the
    measured EE from `/ee_state` (the mapper captures the EE reference on the
    grip rising edge, so engage never jumps);
-3. engaged: `SafetyFilter.filter(raw_pos, raw_rot)` (workspace box clamp
+1. engaged: `SafetyFilter.filter(raw_pos, raw_rot)` (workspace box clamp
    then per-tick linear/angular step clamp) -> target;
    not engaged: publish the latched freeze target (last safe target, or the
    EE pose at first freeze) and `SafetyFilter.reset(ee)`; this is the
    original loop's behaviour so a compliant arm does not chase its own sag;
-4. gripper: trigger 0..1 -> `publish_gripper` (binary option kept);
-5. buttons: B rising edge -> e-stop engaged; A rising edge -> resync
+1. gripper: trigger 0..1 -> `publish_gripper` (binary option kept);
+1. buttons: B rising edge -> e-stop engaged; A rising edge -> resync
    (re-capture references, clear freeze target). E-stop clear is not on the
    headset; use the Xbox pad or `ros2 topic pub /estop`.
 
@@ -186,8 +186,7 @@ for the pad or the headset USB, `environment: {ROS_DOMAIN_ID: "0"}`:
   `ros2 launch rammp_teleop quest.launch.py mock:=true`, no devices.
 
 All declare `publishes: [/setpoint/pose, /setpoint/gripper, /estop]` and
-`subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status,
-/control_status]` (Quest adds `/quest/*`).
+`subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status, /control_status]` (Quest adds `/quest/*`).
 
 `Makefile`: `build`, `run`, `check` (validate all `rammp-alternative*.yaml`),
 `smoke`, `lint`, as in the template. CI: `build.yml` (fragment validation +
@@ -241,11 +240,9 @@ its removal is the user's call.
 
 ## Verification
 
-- Workstation: `uv run --with numpy --with scipy --with pytest pytest
-  rammp_teleop/test` for every pure-logic module (ported xbox tests, ported
+- Workstation: `uv run --with numpy --with scipy --with pytest pytest rammp_teleop/test` for every pure-logic module (ported xbox tests, ported
   Quest mapping/safety/transforms/pose-source/scenario tests, new tests for
-  the freeze/engage logic in `quest_node` factored as a pure class), `make
-  check` for the fragments.
+  the freeze/engage logic in `quest_node` factored as a pure class), `make check` for the fragments.
 - abra: `colcon build --packages-select rammp_teleop`, `colcon test`;
   `ros2 launch rammp_teleop quest.launch.py mock:=true` under
   `ROS_DOMAIN_ID=42` publishes `/quest/joy` and `/quest/right/pose` at ~60 Hz

@@ -3,6 +3,7 @@
 The 'arm' here is a loopback: the measured EE pose is whatever was commanded last
 tick, so smoothing and clamps are the only lag.
 """
+
 import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
@@ -31,7 +32,9 @@ def run(cmd, source, ee_pos=EE0, ee_rot=ROT0, sag=None):
 
 
 def make(**kw):
-    return QuestCommand(MappingConfig(trans_smooth=0.8, rot_smooth=0.8), SafetyConfig(), **kw)
+    return QuestCommand(
+        MappingConfig(trans_smooth=0.8, rot_smooth=0.8), SafetyConfig(), **kw
+    )
 
 
 def test_idle_before_engage_holds_first_ee_pose():
@@ -43,9 +46,13 @@ def test_idle_before_engage_holds_first_ee_pose():
 
 
 def test_hold_target_does_not_chase_sag():
-    out = run(make(), MockPoseSource(default_script()), sag=np.array([0.0, 0.0, -0.001]))
+    out = run(
+        make(), MockPoseSource(default_script()), sag=np.array([0.0, 0.0, -0.001])
+    )
     for p, _, _ in out[:20]:
-        assert np.allclose(p, EE0), "freeze target must be latched, not re-read from a sagging EE"
+        assert np.allclose(
+            p, EE0
+        ), "freeze target must be latched, not re-read from a sagging EE"
 
 
 def test_engaged_motion_follows_script_in_base_frame():
@@ -108,4 +115,6 @@ def test_resync_recaptures_reference_while_engaged():
     pose, _ = MockPoseSource(default_script()).read()
     p, r, engaged = cmd.update(pose, True, elsewhere, ROT0)
     assert engaged
-    assert np.allclose(p, elsewhere), "first tick after resync must not jump away from the measured EE"
+    assert np.allclose(
+        p, elsewhere
+    ), "first tick after resync must not jump away from the measured EE"

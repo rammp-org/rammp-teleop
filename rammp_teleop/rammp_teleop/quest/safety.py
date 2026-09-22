@@ -23,8 +23,8 @@ class SafetyConfig:
     ws_min: np.ndarray = field(default_factory=lambda: np.array([0.2, -0.4, 0.05]))
     ws_max: np.ndarray = field(default_factory=lambda: np.array([0.75, 0.4, 0.7]))
     # Max per-tick motion (velocity clamp). At 60 Hz, 0.01 m/tick = 0.6 m/s.
-    max_lin_step: float = 0.01    # meters per tick
-    max_ang_step: float = 0.05    # radians per tick
+    max_lin_step: float = 0.01  # meters per tick
+    max_ang_step: float = 0.05  # radians per tick
 
     def __post_init__(self):
         self.ws_min = np.asarray(self.ws_min, float)
@@ -85,5 +85,6 @@ class SafetyFilter:
             clamped_vel = True
 
         self._last_pos, self._last_rot = pos.copy(), rot
-        return SafetyResult(pos, rot, clamped_velocity=clamped_vel,
-                            clamped_workspace=clamped_ws)
+        return SafetyResult(
+            pos, rot, clamped_velocity=clamped_vel, clamped_workspace=clamped_ws
+        )

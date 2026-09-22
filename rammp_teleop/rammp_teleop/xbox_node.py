@@ -5,6 +5,7 @@ D-pad or a trigger is deflected and holds otherwise. On every deflected -> relea
 edge (and back) the target is re-seeded from the measured state, so letting go
 stops the arm where it is rather than at a leashed target ahead of it.
 """
+
 from __future__ import annotations
 
 import sys
@@ -13,25 +14,32 @@ from typing import Optional
 
 from sensor_msgs.msg import Joy
 
-from rammp_teleop.logic import CartesianIntegrator, GripperIntegrator, JointIntegrator, XboxMap
+from rammp_teleop.logic import (
+    CartesianIntegrator,
+    GripperIntegrator,
+    JointIntegrator,
+    XboxMap,
+)
 from rammp_teleop.session import TeleopNodeBase, pose_msg, run
 
 
 class XboxTeleopNode(TeleopNodeBase):
     def __init__(self) -> None:
-        super().__init__("xbox_teleop", default_controller="ee_pose_position", default_rate_hz=50.0)
+        super().__init__(
+            "xbox_teleop", default_controller="ee_pose_position", default_rate_hz=50.0
+        )
         dp = self.declare_parameter
         self.joy_topic: str = dp("joy_topic", "/joy").value
         self.deadzone: float = dp("deadzone", 0.15).value
         self.joy_timeout_s: float = dp("joy_timeout_s", 0.5).value
 
-        max_linear = dp("max_linear_speed", 0.05).value        # m/s at full stick
-        max_angular = dp("max_angular_speed", 0.3).value       # rad/s at full stick
-        max_joint = dp("max_joint_speed", 0.2).value           # rad/s at full stick
-        lead_m = dp("target_lead_m", 0.05).value               # leash; 0 disables
+        max_linear = dp("max_linear_speed", 0.05).value  # m/s at full stick
+        max_angular = dp("max_angular_speed", 0.3).value  # rad/s at full stick
+        max_joint = dp("max_joint_speed", 0.2).value  # rad/s at full stick
+        lead_m = dp("target_lead_m", 0.05).value  # leash; 0 disables
         lead_rad = dp("target_lead_rad", 0.2).value
         joint_lead = dp("joint_target_lead_rad", 0.1).value
-        gripper_speed = dp("gripper_speed", 1.0).value         # travel fraction per second
+        gripper_speed = dp("gripper_speed", 1.0).value  # travel fraction per second
 
         self.map = XboxMap(
             axis_left_x=dp("axis_left_x", 0).value,
@@ -59,7 +67,9 @@ class XboxTeleopNode(TeleopNodeBase):
         self._active_prev = False
 
         self.create_subscription(Joy, self.joy_topic, self._on_joy, 10)
-        self.get_logger().info("Sticks move the arm. B = e-stop, Start = clear, Y = resync.")
+        self.get_logger().info(
+            "Sticks move the arm. B = e-stop, Start = clear, Y = resync."
+        )
 
     def engaged_hint(self) -> str:
         return "move a stick"
@@ -72,7 +82,9 @@ class XboxTeleopNode(TeleopNodeBase):
 
     def tick_input(self, dt: float) -> bool:
         now = time.monotonic()
-        joy_fresh = self._joy is not None and (now - self._joy_rx_time) <= self.joy_timeout_s
+        joy_fresh = (
+            self._joy is not None and (now - self._joy_rx_time) <= self.joy_timeout_s
+        )
         axes = list(self._joy.axes) if joy_fresh else []
         buttons = list(self._joy.buttons) if joy_fresh else []
         prev = self._prev_buttons
@@ -115,7 +127,9 @@ class XboxTeleopNode(TeleopNodeBase):
                 self.joints.select_next(step)
                 self.get_logger().info(f"jogging joint_{self.joints.selected + 1}")
             self._prev_select_step = step
-            self.joints.step(self.map.joint_jog_command(self._axes, self.deadzone), dt, q)
+            self.joints.step(
+                self.map.joint_jog_command(self._axes, self.deadzone), dt, q
+            )
         return list(self.joints.positions)
 
     def gripper_target(self, dt: float, engaged: bool):

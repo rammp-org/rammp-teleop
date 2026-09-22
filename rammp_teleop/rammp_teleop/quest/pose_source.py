@@ -91,8 +91,7 @@ class MockPoseSource(PoseSource):
     exhausted.
     """
 
-    def __init__(self, script: list[ScriptFrame] | None = None,
-                 dt: float = 1.0 / 60.0):
+    def __init__(self, script: list[ScriptFrame] | None = None, dt: float = 1.0 / 60.0):
         self.script = script if script is not None else default_script(dt)
         self.dt = dt
         self._i = 0
@@ -112,8 +111,11 @@ class MockPoseSource(PoseSource):
         self._i = 0
 
 
-def parse_oculus_sample(transforms: dict, buttons: dict, hand: str = "r",
-                        ) -> tuple[np.ndarray | None, Buttons]:
+def parse_oculus_sample(
+    transforms: dict,
+    buttons: dict,
+    hand: str = "r",
+) -> tuple[np.ndarray | None, Buttons]:
     """Decode one ``oculus_reader`` snapshot into ``(pose_4x4, Buttons)``.
 
     The controller pose is returned **raw**, in the headset's own right-handed
@@ -166,6 +168,7 @@ class OculusPoseSource(PoseSource):
         self.hand = hand
         if reader is None:
             from oculus_reader.reader import OculusReader  # lazy: needs ADB
+
             reader = OculusReader(ip_address=ip_address)
         self.reader = reader
         self._last_pose: np.ndarray | None = None

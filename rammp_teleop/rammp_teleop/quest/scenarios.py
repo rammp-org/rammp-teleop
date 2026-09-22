@@ -39,8 +39,11 @@ class _Builder:
         self.trigger = 0.0
 
     def _emit(self) -> None:
-        self.frames.append(ScriptFrame(pos=self.pos.copy(), rot=self.rot,
-                                       grip=self.grip, trigger=self.trigger))
+        self.frames.append(
+            ScriptFrame(
+                pos=self.pos.copy(), rot=self.rot, grip=self.grip, trigger=self.trigger
+            )
+        )
 
     def set_grip(self, g: bool) -> "_Builder":
         self.grip = g
@@ -55,8 +58,13 @@ class _Builder:
             self._emit()
         return self
 
-    def move(self, d_pos=(0, 0, 0), d_euler_deg=(0, 0, 0), seconds: float = 1.0,
-             ease: bool = True) -> "_Builder":
+    def move(
+        self,
+        d_pos=(0, 0, 0),
+        d_euler_deg=(0, 0, 0),
+        seconds: float = 1.0,
+        ease: bool = True,
+    ) -> "_Builder":
         """Smoothly translate/rotate the cursor by a delta over ``seconds``."""
         n = max(1, int(round(seconds / self.dt)))
         p0 = self.pos.copy()
@@ -89,19 +97,20 @@ class _Builder:
 
 # --- scenarios --------------------------------------------------------------
 
+
 def demo(dt: float = 1.0 / 60.0) -> list[ScriptFrame]:
     """Representative on-camera motion: engage, move through space, use the
     gripper, return, disengage."""
     b = _Builder(dt)
     b.hold(0.4)
     b.set_grip(True)
-    b.move(d_pos=(0.12, 0, 0), seconds=0.8)        # forward
-    b.move(d_pos=(0, 0.10, 0), seconds=0.7)        # right
-    b.move(d_pos=(0, 0, 0.08), seconds=0.6)        # up
-    b.move(d_euler_deg=(0, 0, 25), seconds=0.6)    # wrist yaw
-    b.set_trigger(1.0).hold(0.4)                   # close gripper
-    b.move(d_euler_deg=(0, 20, 0), seconds=0.6)    # tilt
-    b.set_trigger(0.0).hold(0.3)                   # open gripper
+    b.move(d_pos=(0.12, 0, 0), seconds=0.8)  # forward
+    b.move(d_pos=(0, 0.10, 0), seconds=0.7)  # right
+    b.move(d_pos=(0, 0, 0.08), seconds=0.6)  # up
+    b.move(d_euler_deg=(0, 0, 25), seconds=0.6)  # wrist yaw
+    b.set_trigger(1.0).hold(0.4)  # close gripper
+    b.move(d_euler_deg=(0, 20, 0), seconds=0.6)  # tilt
+    b.set_trigger(0.0).hold(0.3)  # open gripper
     b.move(d_pos=(-0.12, -0.10, -0.08), d_euler_deg=(0, -20, -25), seconds=1.0)
     b.set_grip(False).hold(0.4)
     return b.build()
@@ -148,8 +157,8 @@ def jump_glitch(dt: float = 1.0 / 60.0) -> list[ScriptFrame]:
     b = _Builder(dt)
     b.hold(0.3).set_grip(True)
     b.move(d_pos=(0.05, 0, 0), seconds=0.5)
-    b.glitch(d_pos=(0.6, -0.4, 0.3))      # teleport, one frame
-    b.glitch(d_euler_deg=(90, 0, 0))      # orientation teleport, one frame
+    b.glitch(d_pos=(0.6, -0.4, 0.3))  # teleport, one frame
+    b.glitch(d_euler_deg=(90, 0, 0))  # orientation teleport, one frame
     b.move(d_pos=(0.05, 0, 0), seconds=0.5)  # resume normal motion
     b.set_grip(False).hold(0.2)
     return b.build()
@@ -185,8 +194,8 @@ def clutch_freeze(dt: float = 1.0 / 60.0) -> list[ScriptFrame]:
     b.hold(0.3).set_grip(True)
     b.move(d_pos=(0.08, 0.04, 0), seconds=0.6)
     b.set_grip(False)
-    b.move(d_pos=(0.5, -0.5, 0.4), seconds=0.6)   # controller flies while released
-    b.set_grip(True).hold(0.2)                    # re-engage at new location
+    b.move(d_pos=(0.5, -0.5, 0.4), seconds=0.6)  # controller flies while released
+    b.set_grip(True).hold(0.2)  # re-engage at new location
     b.move(d_pos=(0, 0, 0.05), seconds=0.4)
     b.set_grip(False).hold(0.2)
     return b.build()
