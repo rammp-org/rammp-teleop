@@ -1,0 +1,136 @@
+---
+title: Troubleshooting
+---
+
+# Troubleshooting
+
+Every entry here is a real failure from bringing the Quest up on the Jetson.
+Most share a shape: the reader looks broken and the cause is in the headset.
+Two commands answer most questions before you touch any Python:
+
+```sh
+adb shell dumpsys OVRRemoteService | grep -o "ExternalStatus: [A-Z_]*, TrackingStatus: [A-Z_]*"
+adb logcat -d -s wE9ryARX | tail -1
+```
+
+The first is the headset's own view of the controller. The second is the raw
+line the reader parses: the right controller's 4x4 transform and its buttons.
+
+## The buttons work but the pose never changes
+
+`/quest/joy` shows the grip and trigger, `/quest/right/pose` sits at one value
+within a millimetre, and the raw logcat line shows the **left and right
+controllers with the identical transform** near the origin.
+
+The headset put the controller to sleep. `dumpsys OVRRemoteService` says
+`CONNECTED_INACTIVE`, and the system log has
+
+```
+ControllerManagement: Controller ... sent to sleep as hand tracking is enabled and controllers are not in use
+```
+
+Buttons ride over Bluetooth and keep working; position needs the controller
+awake and in view of the headset's cameras. Turn off **Auto switch from
+controllers to hands** in the headset's Movement tracking settings (see
+[Setting up the Quest](/rammp-teleop/quest-setup#turn-off-controller-auto-sleep)), then pick
+the controller up. It takes about ten seconds from pickup to full tracking.
+
+## `device unauthorized`, on every start
+
+The reader exits with
+
+```
+Device is visible but could not be accessed.
+```
+
+and `adb devices` inside the container says `unauthorized`. The headset was
+authorized with a one-time Allow, so each new adb server needs a fresh prompt.
+Accept the dialog again with **Always allow from this computer** ticked, and
+make sure the `quest3` alternative mounts `/home/abra/.android`, or the key that
+was authorized is thrown away with the container.
+
+If the prompt never appears, the headset is asleep or unworn; a Quest cannot
+show the dialog to nobody. Put it on.
+
+## `Device not found` right after the container starts
+
+Starting a privileged container with `/dev` mounted resets the headset's USB
+link. For a second or two `lsusb` still lists the Quest but adb has nothing.
+The reader waits up to 15 s for this, so seeing it means the wait ran out.
+Check the cable carries data (some USB-C cables are charge-only) and that no
+other adb server on the host has the device claimed. Two adb servers cannot
+share one USB device.
+
+## The headset is on but not in the USB list
+
+A Quest with a flat battery shows a charge light and nothing on USB until
+Android boots, and a Jetson port charges it slowly. Charge it on a wall brick
+until it reaches the home screen, then move the cable.
+
+## `stream closed by driver` a quarter second after `stream open`
+
+The driver expires a stream that receives no setpoint for `stream_timeout_s`
+(0.2 s). Versions before 0.1.0 published nothing until the first controller
+pose arrived, which on a slow adb connect was later than that. The node now
+publishes a hold target from the first tick. If you see this on a current
+image, the setpoints are not reaching the driver: check both containers share
+`--network host`, `--ipc host` and the same `ROS_DOMAIN_ID`.
+
+## `ros2 topic echo` prints nothing and everything is fine
+
+`/setpoint/*`, `/ee_state` and `/joint_states` are best-effort; `/stream_status`
+and `/control_status` are reliable and latched. The default `ros2 topic echo`
+matches neither.
+
+```sh
+ros2 topic echo --qos-reliability best_effort /setpoint/pose
+ros2 topic echo --once --qos-durability transient_local /stream_status
+```
+
+Inside a module container, `ros2 topic` commands can also hit a wedged ROS 2
+daemon and fail with `!rclpy.ok()`. Add `--no-daemon`.
+
+## The pose is stale and the reader says nothing
+
+The headset app died. From ROS it is indistinguishable from a resting
+controller: `oculus_reader` returns the last pose it parsed, forever. The
+reader's watchdog relaunches the app within 2 s and logs
+
+```
+[quest_reader]: headset app was dead, relaunched it (#1)
+```
+
+If the relaunches repeat, `adb logcat` on the headset will say why the app
+exits. To relaunch by hand:
+
+```sh
+adb shell am start -n com.rail.oculus.teleop/.MainActivity
+```
+
+## The arm veers, or forward is sideways
+
+`R_align` is wrong or stale. It is tied to the headset's boot-time frame, so a
+headset reboot invalidates it silently. Hold A for two seconds and make the
+forward gesture again ([Calibrate after every headset
+reboot](/rammp-teleop/quest-setup#calibrate-after-every-headset-reboot)). A mirrored axis
+means the gesture pointed the wrong way; a small consistent veer means it
+drifted sideways.
+
+## The arm driver died with `WRONG_SERVOING_MODE`
+
+```
+terminate called after throwing an instance of 'Kinova::Api::KDetailedException'
+  what():  Device error, Error sub type=WRONG_SERVOING_MODE
+```
+
+That is `kinova-gen3-ros2` 1.0.1 crashing on a servoing-mode switch, which a
+stream open or close triggers. It is not something the teleop node can
+prevent; restart the driver (`sheppy woof arm`) and report it against the
+driver with the log. The teleop node sees the stream drop and freezes; the arm
+goes limp rather than moving.
+
+## Two teleop nodes, and the arm keeps stopping
+
+The driver's `/acquire_control` seizes, so a second node halts the first, and
+each open replaces the other's stream. Run one alternative. See
+[Two things that surprise people](/rammp-teleop#two-things-that-surprise-people).

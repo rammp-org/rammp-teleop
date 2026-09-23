@@ -4,17 +4,53 @@ title: Introduction
 
 # Teleoperating the arm
 
-Operator-input nodes for the Kinova Gen3: an Xbox pad and a Meta Quest 3
-controller. Both drive the arm through
-[`kinova-gen3-ros2`](https://github.com/rammp-org/kinova-gen3-ros2)'s streaming
-tier: they acquire control, open a stream on a pose controller, and publish an
-absolute target every tick. Nothing moves until the operator engages (a stick
-deflection on the pad, grip squeeze on the Quest), and letting go holds the arm
-where it is.
+Operator input for the Kinova Gen3: an **Xbox pad** and a **Meta Quest 3**
+controller, each a ROS 2 node that drives the arm through
+[`kinova-gen3-ros2`](/kinova-gen3-ros2)'s streaming tier.
 
-| Input | Launch | Controller | How it makes a target |
-|---|---|---|---|
-| Xbox pad | `ros2 launch rammp_teleop xbox.launch.py` | `ee_twist` (stiff) | streams stick deflection as a base-frame twist |
-| Quest 3 | `ros2 launch rammp_teleop quest.launch.py` | `ee_pose_impedance` (compliant) | clutched delta of the controller pose, workspace box and step caps |
+Both nodes do the same thing at the arm end. They acquire control, open a stream
+on one controller, and publish a target every tick for as long as they run.
+Nothing moves until the operator engages: a stick deflection on the pad, a grip
+squeeze on the Quest. Let go and the arm holds where it is.
 
-See the [interface reference](interface) for topics, parameters and the button maps.
+| Input    | Controller                      | What the target is                                              |
+| -------- | ------------------------------- | --------------------------------------------------------------- |
+| Xbox pad | `ee_twist` (stiff)              | the stick deflection, streamed as a base-frame twist            |
+| Quest 3  | `ee_pose_impedance` (compliant) | the controller's motion since the squeeze, applied to the EE pose, inside a workspace box and per-tick step caps |
+
+## What it gives you
+
+- **Two inputs, one contract.** A shared session base handles the arm side
+  (acquire, open, stream, close, recover) so the input nodes only turn
+  their device into a target.
+- **The Quest plugged straight into the Jetson.** The headset talks to the
+  robot over a USB-C cable and adb. No laptop in the loop.
+- **Calibration from the controller.** The Quest's tracking yaw is arbitrary
+  per headset boot. Hold A, move your hand forward once, and the alignment is
+  fixed and saved.
+- **A headset that stays awake.** The reader defeats the proximity sensor on
+  connect and relaunches the headset app if it dies, so an unworn headset on
+  the bench keeps tracking.
+
+## Start here
+
+- **[Getting started](/rammp-teleop/getting-started)**: run the Quest pipeline with a scripted
+  controller against a simulated arm, then the real thing through sheppy.
+- **[Setting up the Quest](/rammp-teleop/quest-setup)**: the one-time headset setup, the cable
+  into the Jetson, and the calibration gesture.
+- **[Interface reference](/rammp-teleop/interface)**: every topic, service, parameter and
+  button, with the QoS you must match.
+- **[Troubleshooting](/rammp-teleop/troubleshooting)**: the failures people actually hit,
+  starting with the one where the buttons work and the pose does not.
+
+## Two things that surprise people
+
+**One input at a time.** The arm has one owner token and one stream, and the
+driver's `/acquire_control` seizes. Starting a second teleop node halts the
+first. Pick one alternative in your sheppy profile.
+
+**The Quest sleeps its controller, not just itself.** With hand tracking's
+auto-switch on, the headset puts an idle controller to sleep. Its buttons keep
+working over Bluetooth while its pose freezes, which looks exactly like a bug in
+the reader. The fix is a headset setting, described in
+[Setting up the Quest](/rammp-teleop/quest-setup#turn-off-controller-auto-sleep).
