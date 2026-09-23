@@ -7,6 +7,7 @@ interface; downstream code never knows which is behind it.
 
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -182,7 +183,17 @@ class OculusPoseSource(PoseSource):
     ADB / the headset package installed). With ``keep_awake`` the headset's
     proximity sensor is defeated on connect (see :func:`keep_headset_awake`); ``awake``
     records the result, ``None`` when nothing was sent.
+
+    The headset app can die silently (oculus_reader launches it once and then
+    only tails logcat, so the last pose is repeated forever). With
+    ``app_watchdog_s`` > 0 a daemon thread checks every that-many seconds that
+    the app process exists and relaunches it if not; ``app_relaunches`` counts.
     """
+
+    APP_START = (
+        'am start -n "{pkg}/{pkg}.MainActivity" -a android.intent.action.MAIN '
+        "-c android.intent.category.LAUNCHER"
+    )
 
     def __init__(
         self,
@@ -190,6 +201,7 @@ class OculusPoseSource(PoseSource):
         reader=None,
         ip_address: str | None = None,
         keep_awake: bool = True,
+        app_watchdog_s: float = 2.0,
     ):
         if hand not in ("r", "l"):
             raise ValueError(f"hand must be 'r' or 'l', got {hand!r}")
@@ -204,6 +216,28 @@ class OculusPoseSource(PoseSource):
         if keep_awake and device is not None:
             self.awake = keep_headset_awake(device.shell)
         self._last_pose: np.ndarray | None = None
+        self.app_relaunches = 0
+        self._stop = threading.Event()
+        if app_watchdog_s > 0 and device is not None:
+            threading.Thread(
+                target=self._watchdog, args=(app_watchdog_s,), daemon=True
+            ).start()
+
+    def check_app(self) -> bool:
+        """Relaunch the headset app if its process is gone. True if relaunched."""
+        pkg = getattr(self.reader, "APK_name", "com.rail.oculus.teleop")
+        if (self.reader.device.shell(f"pidof {pkg}") or "").strip():
+            return False
+        self.reader.device.shell(self.APP_START.format(pkg=pkg))
+        self.app_relaunches += 1
+        return True
+
+    def _watchdog(self, period_s: float) -> None:
+        while not self._stop.wait(period_s):
+            try:
+                self.check_app()
+            except Exception:  # adb hiccup; try again next period
+                pass
 
     def read(self) -> tuple[np.ndarray, Buttons]:
         transforms, buttons = self.reader.get_transformations_and_buttons()
@@ -215,6 +249,7 @@ class OculusPoseSource(PoseSource):
         return self._last_pose.copy(), btn
 
     def close(self) -> None:
+        self._stop.set()
         stop = getattr(self.reader, "stop", None)
         if callable(stop):
             stop()

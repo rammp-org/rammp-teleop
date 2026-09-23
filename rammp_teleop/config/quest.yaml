@@ -49,3 +49,4 @@ quest_reader:
     rate_hz: 60.0
     mock: false                       # true = scripted controller, no headset
     keep_awake: true                  # defeat the proximity sensor on connect (adb prox_close)
+    app_watchdog_s: 2.0               # relaunch the headset app if it dies; 0 disables

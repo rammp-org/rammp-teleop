@@ -8,7 +8,8 @@ With ``mock:=true`` a scripted controller (engage, move, grip, release) loops
 forever, so the whole pipeline runs with no headset and no adb.
 
 On connect the headset's proximity sensor is defeated (``keep_awake``), because
-a Quest that thinks it is not worn sleeps and stops tracking.
+a Quest that thinks it is not worn sleeps and stops tracking. A watchdog
+relaunches the headset app if its process dies (``app_watchdog_s``).
 
 The ROS imports live inside ``main`` so ``encode_sample`` stays testable on a
 host without rclpy.
@@ -37,7 +38,9 @@ def encode_sample(pose: np.ndarray, btn: Buttons, hand: str):
     return (pos, quat), [float(btn.trigger)], buttons
 
 
-def _build_source(hand: str, quest_ip: str, mock: bool, keep_awake: bool):
+def _build_source(
+    hand: str, quest_ip: str, mock: bool, keep_awake: bool, app_watchdog_s: float
+):
     if mock:
         return MockPoseSource(default_script())
     from rammp_teleop.quest.pose_source import (
@@ -48,6 +51,7 @@ def _build_source(hand: str, quest_ip: str, mock: bool, keep_awake: bool):
         hand="r" if hand == "right" else "l",
         ip_address=quest_ip or None,
         keep_awake=keep_awake,
+        app_watchdog_s=app_watchdog_s,
     )
 
 
@@ -67,11 +71,17 @@ def main(argv=None) -> int:
             self.mock: bool = dp("mock", False).value
             self.frame_id: str = dp("frame_id", "quest").value
             self.keep_awake: bool = dp("keep_awake", True).value
+            self.app_watchdog_s: float = dp("app_watchdog_s", 2.0).value
             if self.hand not in ("right", "left"):
                 raise ValueError(f"hand must be 'right' or 'left', got {self.hand!r}")
             self.source = _build_source(
-                self.hand, self.quest_ip, self.mock, self.keep_awake
+                self.hand,
+                self.quest_ip,
+                self.mock,
+                self.keep_awake,
+                self.app_watchdog_s,
             )
+            self._relaunches_seen = 0
             if getattr(self.source, "awake", None) is False:
                 self.get_logger().warning(
                     "quest_reader: headset still reports asleep after keep-awake; "
@@ -90,6 +100,12 @@ def main(argv=None) -> int:
         def _tick(self) -> None:
             if self.mock and self.source.done:
                 self.source.reset()
+            n = getattr(self.source, "app_relaunches", 0)
+            if n != self._relaunches_seen:
+                self._relaunches_seen = n
+                self.get_logger().warning(
+                    f"quest_reader: headset app was dead, relaunched it (#{n})"
+                )
             pose, btn = self.source.read()
             (pos, quat), axes, buttons = encode_sample(pose, btn, self.hand)
             stamp = self.get_clock().now().to_msg()

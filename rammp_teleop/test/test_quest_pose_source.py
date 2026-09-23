@@ -251,3 +251,45 @@ def test_oculus_source_keep_awake_off_sends_nothing():
     src = OculusPoseSource(hand="r", reader=reader, keep_awake=False)
     assert reader.device.shell.commands == []
     assert src.awake is None
+
+
+# --- app watchdog: the headset app dies silently and oculus_reader never notices ---
+
+
+class AppDevice:
+    """adb device whose ``pidof`` answers ``running`` and which records am start."""
+
+    def __init__(self, running: bool):
+        self.running = running
+        self.commands = []
+
+    def shell(self, cmd):
+        self.commands.append(cmd)
+        if cmd.startswith("pidof "):
+            return "12345\n" if self.running else ""
+        return ""
+
+
+def _source_with_device(running: bool) -> tuple[OculusPoseSource, AppDevice]:
+    reader = FakeReader([(SAMPLE_TRANSFORMS, SAMPLE_BUTTONS)])
+    reader.device = AppDevice(running)
+    reader.APK_name = "com.rail.oculus.teleop"
+    src = OculusPoseSource(hand="r", reader=reader, keep_awake=False, app_watchdog_s=0)
+    return src, reader.device
+
+
+def test_watchdog_relaunches_dead_app():
+    src, dev = _source_with_device(running=False)
+    assert src.check_app() is True
+    assert any(
+        c.startswith("am start -n") and "com.rail.oculus.teleop" in c
+        for c in dev.commands
+    )
+    assert src.app_relaunches == 1
+
+
+def test_watchdog_leaves_running_app_alone():
+    src, dev = _source_with_device(running=True)
+    assert src.check_app() is False
+    assert not any(c.startswith("am start") for c in dev.commands)
+    assert src.app_relaunches == 0
