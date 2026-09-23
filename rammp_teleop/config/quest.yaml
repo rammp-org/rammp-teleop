@@ -3,8 +3,8 @@
 # r_align_euler_zyx_deg is a PER-SESSION calibration: the Quest tracking frame's
 # yaw depends on how the headset was oriented at boot. Run
 #   ros2 run rammp_teleop quest_calibrate
-# and paste the printed triple here before flying. The value below is a stale
-# example from a previous session, not a default that works.
+# and paste the printed triple here before flying. The value below is from the
+# last real session on abra, not a default that survives a headset reboot.
 quest_teleop:
   ros__parameters:
     controller: ee_pose_impedance     # compliant (joint impedance + in-loop IK); ee_pose_position is stiff
@@ -15,7 +15,7 @@ quest_teleop:
     input_timeout_s: 0.5              # no /quest/* for this long => grip reads as released (freeze)
 
     # --- controller -> base mapping ---
-    r_align_euler_zyx_deg: [128.7663, -8.3652, 92.4841]
+    r_align_euler_zyx_deg: [131.1824, -2.9616, 91.0158]  # abra, 2026-09-23 session
     trans_smooth: 0.8                 # first-order lag on the command, (0, 1]; 1.0 = raw
     rot_smooth: 0.8
     jump_pos_tol: 0.05                # m per tick; larger controller jumps are rejected
