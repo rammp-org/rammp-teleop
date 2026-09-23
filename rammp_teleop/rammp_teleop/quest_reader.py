@@ -7,6 +7,9 @@ Nothing is remapped here: the teleop node's R_align is the one calibration knob.
 With ``mock:=true`` a scripted controller (engage, move, grip, release) loops
 forever, so the whole pipeline runs with no headset and no adb.
 
+On connect the headset's proximity sensor is defeated (``keep_awake``), because
+a Quest that thinks it is not worn sleeps and stops tracking.
+
 The ROS imports live inside ``main`` so ``encode_sample`` stays testable on a
 host without rclpy.
 """
@@ -34,7 +37,7 @@ def encode_sample(pose: np.ndarray, btn: Buttons, hand: str):
     return (pos, quat), [float(btn.trigger)], buttons
 
 
-def _build_source(hand: str, quest_ip: str, mock: bool):
+def _build_source(hand: str, quest_ip: str, mock: bool, keep_awake: bool):
     if mock:
         return MockPoseSource(default_script())
     from rammp_teleop.quest.pose_source import (
@@ -42,7 +45,9 @@ def _build_source(hand: str, quest_ip: str, mock: bool):
     )  # imports oculus_reader (needs adb)
 
     return OculusPoseSource(
-        hand="r" if hand == "right" else "l", ip_address=quest_ip or None
+        hand="r" if hand == "right" else "l",
+        ip_address=quest_ip or None,
+        keep_awake=keep_awake,
     )
 
 
@@ -61,9 +66,17 @@ def main(argv=None) -> int:
             self.rate_hz: float = dp("rate_hz", 60.0).value
             self.mock: bool = dp("mock", False).value
             self.frame_id: str = dp("frame_id", "quest").value
+            self.keep_awake: bool = dp("keep_awake", True).value
             if self.hand not in ("right", "left"):
                 raise ValueError(f"hand must be 'right' or 'left', got {self.hand!r}")
-            self.source = _build_source(self.hand, self.quest_ip, self.mock)
+            self.source = _build_source(
+                self.hand, self.quest_ip, self.mock, self.keep_awake
+            )
+            if getattr(self.source, "awake", None) is False:
+                self.get_logger().warning(
+                    "quest_reader: headset still reports asleep after keep-awake; "
+                    "tracking will be an identity pose with no buttons until it wakes"
+                )
             self._pose_pub = self.create_publisher(
                 PoseStamped, f"/quest/{self.hand}/pose", 10
             )

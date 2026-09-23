@@ -45,8 +45,17 @@ workspace.
   pip install -e ~/oculus_reader
   ```
 
-  Connect the headset over USB and accept the debugging prompt inside it. Then
-  calibrate the controller-to-base rotation once per session:
+  Connect the headset over USB and accept the debugging prompt inside it. The
+  reader and the calibration tool defeat the headset's proximity sensor on
+  connect (`keep_awake`, adb `prox_close`) so it keeps tracking while not worn;
+  a headset reboot clears that, and the next connect re-sends it. To hand the
+  headset back to normal use:
+
+  ```bash
+  adb shell am broadcast -a com.oculus.vrpowermanager.automation_disable
+  ```
+
+  Then calibrate the controller-to-base rotation once per session:
 
   ```bash
   ros2 run rammp_teleop quest_calibrate

@@ -3,6 +3,7 @@ import numpy as np
 from rammp_teleop.quest.pose_source import (
     MockPoseSource,
     OculusPoseSource,
+    keep_headset_awake,
     parse_oculus_sample,
 )
 
@@ -192,3 +193,61 @@ def test_oculus_source_holds_last_pose_and_freezes_when_tracking_drops():
     pose2, btn2 = src.read()
     assert np.allclose(pose2, pose1)  # holds last good pose
     assert btn2.grip is False  # but releases the clutch -> freeze
+
+
+# --- keep-awake: defeat the proximity sensor so the headset keeps tracking ---
+
+
+class FakeShell:
+    """Records adb shell commands; answers ``dumpsys power`` with a canned state."""
+
+    def __init__(self, wakefulness="Awake"):
+        self.wakefulness = wakefulness
+        self.commands = []
+
+    def __call__(self, cmd):
+        self.commands.append(cmd)
+        if cmd.startswith("dumpsys power"):
+            return f"  mWakefulness={self.wakefulness}\n"
+        return ""
+
+
+def test_keep_awake_wakes_disables_prox_and_stays_on():
+    shell = FakeShell()
+    assert keep_headset_awake(shell) is True
+    assert shell.commands[:3] == [
+        "input keyevent KEYCODE_WAKEUP",
+        "am broadcast -a com.oculus.vrpowermanager.prox_close",
+        "svc power stayon usb",
+    ]
+
+
+def test_keep_awake_reports_headset_still_asleep():
+    assert keep_headset_awake(FakeShell(wakefulness="Asleep")) is False
+
+
+def test_oculus_source_keeps_headset_awake_on_construction():
+    class Device:
+        def __init__(self):
+            self.shell = FakeShell()
+
+    reader = FakeReader([(SAMPLE_TRANSFORMS, SAMPLE_BUTTONS)])
+    reader.device = Device()
+    src = OculusPoseSource(hand="r", reader=reader)
+    assert (
+        "am broadcast -a com.oculus.vrpowermanager.prox_close"
+        in reader.device.shell.commands
+    )
+    assert src.awake is True
+
+
+def test_oculus_source_keep_awake_off_sends_nothing():
+    class Device:
+        def __init__(self):
+            self.shell = FakeShell()
+
+    reader = FakeReader([(SAMPLE_TRANSFORMS, SAMPLE_BUTTONS)])
+    reader.device = Device()
+    src = OculusPoseSource(hand="r", reader=reader, keep_awake=False)
+    assert reader.device.shell.commands == []
+    assert src.awake is None

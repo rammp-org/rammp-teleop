@@ -148,6 +148,26 @@ def parse_oculus_sample(
     )
 
 
+KEEP_AWAKE_COMMANDS = (
+    "input keyevent KEYCODE_WAKEUP",  # wake now
+    "am broadcast -a com.oculus.vrpowermanager.prox_close",  # pretend it is worn
+    "svc power stayon usb",  # no screen-off timeout while on USB
+)
+
+
+def keep_headset_awake(shell) -> bool:
+    """Defeat the Quest's proximity sensor so it keeps tracking when not worn.
+
+    ``shell`` is an adb shell callable (``ppadb`` ``Device.shell``). The
+    ``prox_close`` broadcast does not survive a headset reboot, so this runs on
+    every connect. Returns whether the headset reports itself awake afterwards.
+    Undo by hand with ``am broadcast -a com.oculus.vrpowermanager.automation_disable``.
+    """
+    for cmd in KEEP_AWAKE_COMMANDS:
+        shell(cmd)
+    return "mWakefulness=Awake" in (shell("dumpsys power | grep mWakefulness=") or "")
+
+
 class OculusPoseSource(PoseSource):
     """Real Meta Quest source: wraps ``oculus_reader`` over ADB (~70 Hz).
 
@@ -159,10 +179,18 @@ class OculusPoseSource(PoseSource):
 
     ``reader`` is injectable for testing; left ``None`` it constructs a real
     ``OculusReader`` (imported lazily so this module imports on hosts without
-    ADB / the headset package installed).
+    ADB / the headset package installed). With ``keep_awake`` the headset's
+    proximity sensor is defeated on connect (see :func:`keep_headset_awake`); ``awake``
+    records the result, ``None`` when nothing was sent.
     """
 
-    def __init__(self, hand: str = "r", reader=None, ip_address: str | None = None):
+    def __init__(
+        self,
+        hand: str = "r",
+        reader=None,
+        ip_address: str | None = None,
+        keep_awake: bool = True,
+    ):
         if hand not in ("r", "l"):
             raise ValueError(f"hand must be 'r' or 'l', got {hand!r}")
         self.hand = hand
@@ -171,6 +199,10 @@ class OculusPoseSource(PoseSource):
 
             reader = OculusReader(ip_address=ip_address)
         self.reader = reader
+        self.awake: bool | None = None
+        device = getattr(reader, "device", None)
+        if keep_awake and device is not None:
+            self.awake = keep_headset_awake(device.shell)
         self._last_pose: np.ndarray | None = None
 
     def read(self) -> tuple[np.ndarray, Buttons]:

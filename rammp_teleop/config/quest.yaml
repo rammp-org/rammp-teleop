@@ -48,3 +48,4 @@ quest_reader:
     quest_ip: ""                      # empty = USB; set for adb over Wi-Fi
     rate_hz: 60.0
     mock: false                       # true = scripted controller, no headset
+    keep_awake: true                  # defeat the proximity sensor on connect (adb prox_close)
