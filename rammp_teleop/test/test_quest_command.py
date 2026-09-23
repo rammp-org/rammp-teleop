@@ -118,3 +118,15 @@ def test_resync_recaptures_reference_while_engaged():
     assert np.allclose(
         p, elsewhere
     ), "first tick after resync must not jump away from the measured EE"
+
+
+def test_hold_before_any_controller_pose_is_the_first_ee_pose():
+    # The reader may not have delivered a controller pose yet when the stream
+    # opens; the node must still publish a hold target every tick or the
+    # driver expires the stream (0.2 s).
+    cmd = make()
+    pos, rot = cmd.hold(EE0, ROT0)
+    assert np.allclose(pos, EE0)
+    # a sagging arm must not drag the hold target down tick by tick
+    pos2, _ = cmd.hold(np.asarray(EE0, float) + np.array([0.0, 0.0, -0.02]), ROT0)
+    assert np.allclose(pos2, EE0)

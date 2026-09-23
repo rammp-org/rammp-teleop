@@ -71,8 +71,17 @@ class QuestCommand:
             self._hold_pos, self._hold_rot = safe.pos.copy(), safe.rot
             return safe.pos, safe.rot, True
 
+        pos, rot = self.hold(ee_pos, ee_rot)
+        return pos, rot, False
+
+    def hold(self, ee_pos, ee_rot: Rotation) -> tuple[np.ndarray, Rotation]:
+        """The not-engaged target: the EE pose first seen, never chasing sag.
+
+        Also what the node sends before any controller pose has arrived, so
+        the stream stays alive (the driver expires it after 0.2 s of silence).
+        """
         if self._hold_pos is None:
             self._hold_pos = np.asarray(ee_pos, float).copy()
             self._hold_rot = ee_rot
         self.safety.reset(ee_pos, ee_rot)  # clamp baseline tracks reality for re-engage
-        return self._hold_pos.copy(), self._hold_rot, False
+        return self._hold_pos.copy(), self._hold_rot

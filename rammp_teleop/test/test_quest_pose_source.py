@@ -1,9 +1,11 @@
+import pytest
 import numpy as np
 
 from rammp_teleop.quest.pose_source import (
     MockPoseSource,
     OculusPoseSource,
     keep_headset_awake,
+    wait_for_adb_device,
     parse_oculus_sample,
 )
 
@@ -293,3 +295,41 @@ def test_watchdog_leaves_running_app_alone():
     assert src.check_app() is False
     assert not any(c.startswith("am start") for c in dev.commands)
     assert src.app_relaunches == 0
+
+
+# --- adb device wait: starting the container resets the headset's USB link ---
+
+
+class FakeAdbDevice:
+    def __init__(self, serial, state):
+        self.serial, self._state = serial, state
+
+    def get_state(self):
+        return self._state
+
+
+class FakeAdbClient:
+    """Replays one ``devices()`` answer per poll."""
+
+    def __init__(self, answers):
+        self.answers = list(answers)
+        self.polls = 0
+
+    def devices(self):
+        self.polls += 1
+        return self.answers[min(self.polls - 1, len(self.answers) - 1)]
+
+
+def test_wait_for_adb_device_returns_once_authorized():
+    client = FakeAdbClient(
+        [[], [FakeAdbDevice("Q", "unauthorized")], [FakeAdbDevice("Q", "device")]]
+    )
+    dev = wait_for_adb_device(client, timeout_s=5.0, poll_s=0.0)
+    assert dev.serial == "Q"
+    assert client.polls == 3
+
+
+def test_wait_for_adb_device_times_out():
+    client = FakeAdbClient([[]])
+    with pytest.raises(TimeoutError):
+        wait_for_adb_device(client, timeout_s=0.05, poll_s=0.01)

@@ -134,11 +134,16 @@ class QuestTeleopNode(TeleopNodeBase):
 
     def compute_target(self, dt: float, engaged: bool):
         ee = self.ee_pose()
-        if ee is None or self._ctrl_pose is None:
+        if ee is None:
             return None
         ee_pos = np.asarray(ee[0], float)
         ee_rot = Rotation.from_quat(ee[1])
-        pos, rot, _ = self.cmd.update(self._ctrl_pose, engaged, ee_pos, ee_rot)
+        if (
+            self._ctrl_pose is None
+        ):  # no controller pose yet: hold, keep the stream alive
+            pos, rot = self.cmd.hold(ee_pos, ee_rot)
+        else:
+            pos, rot, _ = self.cmd.update(self._ctrl_pose, engaged, ee_pos, ee_rot)
         return pose_msg(pos, rot.as_quat())
 
     def gripper_target(self, dt: float, engaged: bool):

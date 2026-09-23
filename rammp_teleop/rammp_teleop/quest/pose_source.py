@@ -7,7 +7,9 @@ interface; downstream code never knows which is behind it.
 
 from __future__ import annotations
 
+import subprocess
 import threading
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -169,6 +171,26 @@ def keep_headset_awake(shell) -> bool:
     return "mWakefulness=Awake" in (shell("dumpsys power | grep mWakefulness=") or "")
 
 
+def wait_for_adb_device(client, timeout_s: float = 15.0, poll_s: float = 0.5):
+    """Poll a ``ppadb`` client until a USB device reports state ``device``.
+
+    Starting a container (privileged, /dev mounted) resets the headset's USB
+    link for a second or two, and a fresh adb server needs a moment to finish
+    the auth handshake; oculus_reader looks exactly once and gives up.
+    """
+    deadline = time.monotonic() + timeout_s
+    while True:
+        for dev in client.devices():
+            if dev.serial.count(".") < 3 and dev.get_state() == "device":
+                return dev
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"no authorized adb device after {timeout_s:.0f}s: is the Quest "
+                "plugged in, awake, and USB debugging accepted with 'Always allow'?"
+            )
+        time.sleep(poll_s)
+
+
 class OculusPoseSource(PoseSource):
     """Real Meta Quest source: wraps ``oculus_reader`` over ADB (~70 Hz).
 
@@ -202,13 +224,20 @@ class OculusPoseSource(PoseSource):
         ip_address: str | None = None,
         keep_awake: bool = True,
         app_watchdog_s: float = 2.0,
+        adb_wait_s: float = 15.0,
     ):
         if hand not in ("r", "l"):
             raise ValueError(f"hand must be 'r' or 'l', got {hand!r}")
         self.hand = hand
         if reader is None:
             from oculus_reader.reader import OculusReader  # lazy: needs ADB
+            from ppadb.client import Client as AdbClient
 
+            if ip_address is None and adb_wait_s > 0:
+                subprocess.run(
+                    ["adb", "start-server"], check=False, capture_output=True
+                )
+                wait_for_adb_device(AdbClient(host="127.0.0.1", port=5037), adb_wait_s)
             reader = OculusReader(ip_address=ip_address)
         self.reader = reader
         self.awake: bool | None = None
