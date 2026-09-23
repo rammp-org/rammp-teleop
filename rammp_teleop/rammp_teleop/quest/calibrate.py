@@ -15,7 +15,9 @@ also cleans up the fact that hand gestures are never perfectly orthogonal).
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -46,6 +48,99 @@ def r_align_from_gestures(fwd, left, up) -> Rotation:
     d = np.sign(np.linalg.det(V @ U.T))
     R = V @ np.diag([1.0, 1.0, d]) @ U.T
     return Rotation.from_matrix(R)
+
+
+def r_align_from_forward(fwd, up=(0.0, 1.0, 0.0)) -> Rotation:
+    """One-gesture calibration: only the yaw is unknown.
+
+    Quest tracking space is gravity-aligned (+Y up), so controller->base is the
+    y-up/z-up axis swap plus a yaw about vertical. ``fwd`` is the controller-frame
+    displacement seen while the hand moved along base +X; its vertical component
+    is discarded. Same solver as the three-gesture version with left = up x fwd.
+    """
+    up = _unit(up)
+    fwd = np.asarray(fwd, dtype=float)
+    fwd_h = fwd - np.dot(fwd, up) * up
+    if np.linalg.norm(fwd_h) < 0.05:
+        raise ValueError(
+            "forward gesture is (near) vertical; move the hand horizontally"
+        )
+    return r_align_from_gestures(fwd_h, np.cross(up, fwd_h), up)
+
+
+class LiveCalibrator:
+    """In-session one-gesture calibration driven from the controller.
+
+    Hold A for ``hold_s`` to arm. While armed the grip does not drive the arm:
+    squeeze, move the hand along base +X, release. ``step`` returns
+    ``("armed"|"done"|"rejected"|"timeout", R_or_None)`` on a transition, else
+    ``None``. Pure so the node stays thin.
+    """
+
+    def __init__(
+        self, hold_s: float = 2.0, min_move: float = 0.10, timeout_s: float = 30.0
+    ):
+        self.hold_s, self.min_move, self.timeout_s = hold_s, min_move, timeout_s
+        self.active = False
+        self._a_since: float | None = None
+        self._armed_at = 0.0
+        self._prev_grip = False
+        self._start: np.ndarray | None = None
+
+    def step(self, now: float, a_held: bool, grip: bool, ctrl_pos):
+        if not self.active:
+            if not a_held:
+                self._a_since = None
+                return None
+            if self._a_since is None:
+                self._a_since = now
+            if now - self._a_since < self.hold_s:
+                return None
+            self.active, self._armed_at, self._a_since = True, now, None
+            self._prev_grip, self._start = grip, None
+            return ("armed", None)
+
+        if now - self._armed_at > self.timeout_s:
+            self.active = False
+            return ("timeout", None)
+        event = None
+        if grip and not self._prev_grip and ctrl_pos is not None:
+            self._start = np.asarray(ctrl_pos, float).copy()
+        elif (
+            not grip
+            and self._prev_grip
+            and self._start is not None
+            and ctrl_pos is not None
+        ):
+            delta = np.asarray(ctrl_pos, float) - self._start
+            self._start = None
+            if np.linalg.norm(delta) < self.min_move:
+                event = ("rejected", None)
+            else:
+                try:
+                    self.active = False
+                    event = ("done", r_align_from_forward(delta))
+                except ValueError:
+                    self.active = True
+                    event = ("rejected", None)
+        self._prev_grip = grip
+        return event
+
+
+def save_r_align(path, rot: Rotation) -> None:
+    """Persist as the config triple so the file and the YAML mean the same thing."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(
+        json.dumps({"r_align_euler_zyx_deg": euler_zyx_deg(rot)}) + "\n"
+    )
+
+
+def load_r_align(path) -> Rotation | None:
+    p = Path(path)
+    if not p.is_file():
+        return None
+    ez = json.loads(p.read_text())["r_align_euler_zyx_deg"]
+    return Rotation.from_euler("ZYX", [float(v) for v in ez], degrees=True)
 
 
 def euler_zyx_deg(rot: Rotation) -> list[float]:

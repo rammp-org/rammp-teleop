@@ -1,6 +1,7 @@
 # Meta Quest 3 teleop: quest_reader (adb over USB, needs /dev/bus/usb) plus
-# quest_teleop streaming poses on ee_pose_impedance. r_align in
-# config/quest.yaml is per-session; run quest_calibrate first.
+# quest_teleop streaming poses on ee_pose_impedance. R_align is per headset
+# boot: hold A on the controller to recalibrate in session; the result persists
+# in /home/abra/.config/rammp_teleop (r_align_file) across restarts.
 # ~/.android holds the adb key the headset authorized ("Always allow from this
 # computer"); without the mount every container start re-prompts the headset.
 id: quest_teleop
@@ -14,8 +15,9 @@ container:
   volumes:
     - /dev:/dev
     - /home/abra/.android:/root/.android
+    - /home/abra/.config/rammp_teleop:/config
   environment:
     ROS_DOMAIN_ID: "0"
-  command: /module_ws/src/rammp-teleop/scripts/launch_entry.py rammp_teleop quest.launch.py
+  command: /module_ws/src/rammp-teleop/scripts/launch_entry.py rammp_teleop quest.launch.py r_align_file:=/config/quest_r_align.json
 publishes: [/setpoint/pose, /setpoint/gripper, /estop, /quest/right/pose, /quest/joy]
 subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status, /control_status]

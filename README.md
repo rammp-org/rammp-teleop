@@ -57,7 +57,15 @@ workspace.
   adb shell am broadcast -a com.oculus.vrpowermanager.automation_disable
   ```
 
-  Then calibrate the controller-to-base rotation once per session:
+  Then calibrate the controller-to-base rotation. The Quest's tracking yaw is
+  arbitrary per headset boot, so this is needed after every reboot. From the
+  controller, with teleop running: **hold A for two seconds**, squeeze the grip,
+  move your hand about 20 cm along the robot's +X (away from the base), release.
+  The new alignment applies at once and, with `r_align_file` set (the docker
+  fragment sets it), persists across restarts. Only the yaw is solved; roll and
+  pitch follow from the headset's gravity-aligned frame.
+
+  The three-gesture command-line tool still exists as a fallback:
 
   ```bash
   ros2 run rammp_teleop quest_calibrate

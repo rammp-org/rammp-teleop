@@ -18,6 +18,7 @@ def generate_launch_description():
     hand = LaunchConfiguration("hand")
     quest_ip = LaunchConfiguration("quest_ip")
     mock = LaunchConfiguration("mock")
+    r_align_file = LaunchConfiguration("r_align_file")
 
     return LaunchDescription(
         [
@@ -38,6 +39,11 @@ def generate_launch_description():
                 default_value="false",
                 description="scripted controller, no headset",
             ),
+            DeclareLaunchArgument(
+                "r_align_file",
+                default_value="",
+                description="where in-session calibration persists R_align; overrides the YAML triple when present",
+            ),
             Node(
                 package="rammp_teleop",
                 executable="quest_reader",
@@ -52,7 +58,14 @@ def generate_launch_description():
                 package="rammp_teleop",
                 executable="quest_teleop",
                 name="quest_teleop",
-                parameters=[params_file, {"controller": controller, "hand": hand}],
+                parameters=[
+                    params_file,
+                    {
+                        "controller": controller,
+                        "hand": hand,
+                        "r_align_file": r_align_file,
+                    },
+                ],
                 output="screen",
             ),
         ]

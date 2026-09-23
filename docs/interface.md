@@ -147,22 +147,24 @@ compliant controller).
 
 ### `quest_teleop` (config/quest.yaml)
 
-| Parameter                                                         | Default             | Meaning                                                          |
-| ----------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------- |
-| `controller`                                                      | `ee_pose_impedance` | or `ee_pose_position`                                            |
-| `rate_hz` / `stream_timeout_s`                                    | 60 / 0.2            |                                                                  |
-| `hand`                                                            | `right`             | which controller                                                 |
-| `input_timeout_s`                                                 | 0.5                 | no `/quest/*` for this long => grip reads as released            |
-| `r_align_euler_zyx_deg`                                           | per session         | controller-frame to base-frame rotation; see Calibration         |
-| `trans_smooth` / `rot_smooth`                                     | 0.8                 | first-order lag on the command, (0, 1\]; 1.0 = raw               |
-| `jump_pos_tol` / `jump_rot_tol`                                   | 0.05 m / 0.5 rad    | per-tick jump rejection                                          |
-| `pos_scale`                                                       | 1.0                 | controller motion to EE motion                                   |
-| `rot_frame` / `r_tool_euler_zyx_deg`                              | `base` / `[0,0,0]`  | rotation frame and controller-body to tool-body axes (tool mode) |
-| `ws_min` / `ws_max`                                               | see file            | workspace box, base frame, m                                     |
-| `max_lin_step` / `max_ang_step`                                   | 0.01 m / 0.05 rad   | per tick (0.6 m/s, 3 rad/s at 60 Hz)                             |
-| `gripper_binary` / `gripper_threshold`                            | false / 0.5         |                                                                  |
-| `gripper_cmd_speed` / `gripper_force`                             | 0.5 / 0.3           |                                                                  |
-| `button_grip` / `button_resync` / `button_estop` / `axis_trigger` | 0 / 1 / 2 / 0       | indices into `/quest/joy`                                        |
+| Parameter                                                         | Default             | Meaning                                                                   |
+| ----------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------- |
+| `controller`                                                      | `ee_pose_impedance` | or `ee_pose_position`                                                     |
+| `rate_hz` / `stream_timeout_s`                                    | 60 / 0.2            |                                                                           |
+| `hand`                                                            | `right`             | which controller                                                          |
+| `input_timeout_s`                                                 | 0.5                 | no `/quest/*` for this long => grip reads as released                     |
+| `r_align_euler_zyx_deg`                                           | per session         | controller-frame to base-frame rotation; see Calibration                  |
+| `trans_smooth` / `rot_smooth`                                     | 0.8                 | first-order lag on the command, (0, 1\]; 1.0 = raw                        |
+| `jump_pos_tol` / `jump_rot_tol`                                   | 0.05 m / 0.5 rad    | per-tick jump rejection                                                   |
+| `pos_scale`                                                       | 1.0                 | controller motion to EE motion                                            |
+| `rot_frame` / `r_tool_euler_zyx_deg`                              | `base` / `[0,0,0]`  | rotation frame and controller-body to tool-body axes (tool mode)          |
+| `ws_min` / `ws_max`                                               | see file            | workspace box, base frame, m                                              |
+| `max_lin_step` / `max_ang_step`                                   | 0.01 m / 0.05 rad   | per tick (0.6 m/s, 3 rad/s at 60 Hz)                                      |
+| `gripper_binary` / `gripper_threshold`                            | false / 0.5         |                                                                           |
+| `calib_hold_s`                                                    | 2.0                 | hold A this long to arm in-session calibration                            |
+| `r_align_file`                                                    | `""`                | where calibration persists (JSON); overrides the YAML triple when present |
+| `gripper_cmd_speed` / `gripper_force`                             | 0.5 / 0.3           |                                                                           |
+| `button_grip` / `button_resync` / `button_estop` / `axis_trigger` | 0 / 1 / 2 / 0       | indices into `/quest/joy`                                                 |
 
 ### `quest_reader`
 
@@ -179,7 +181,17 @@ compliant controller).
 ## Calibration
 
 The Quest's tracking frame yaw depends on how the headset was oriented at boot,
-so `r_align_euler_zyx_deg` is a per-session value:
+so `R_align` must be redone after every headset reboot.
+
+**In session (preferred):** hold A for `calib_hold_s`, then squeeze the grip, move
+the hand ~20 cm along robot +X, release. The grip does not drive the arm while
+calibration is armed (the arm holds). Only the yaw is solved: the headset frame
+is gravity-aligned, so roll and pitch are the fixed y-up to z-up swap. The result
+applies immediately and is written to `r_align_file` when set, which then
+overrides `r_align_euler_zyx_deg` on the next start. Too short or vertical a move
+is rejected and can be redone; 30 s without a move times out.
+
+**Fallback, three gestures on the command line:**
 
 ```bash
 ros2 run rammp_teleop quest_calibrate            # USB

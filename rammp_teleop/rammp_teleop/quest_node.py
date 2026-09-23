@@ -5,6 +5,11 @@ applied to the EE pose from that moment (no absolute calibration; R_align is the
 one rotation knob). Release to freeze. Index trigger drives the gripper. B
 engages /estop; A re-captures the references.
 
+Hold A for ``calib_hold_s`` to recalibrate R_align in session: squeeze the grip,
+move the hand along robot +X, release. The result applies immediately and is
+saved to ``r_align_file`` (if set), which overrides the YAML triple on the next
+start. Needed whenever the headset reboots, since its tracking yaw is arbitrary.
+
 Default controller is ee_pose_impedance, the same joint-impedance-with-IK law the
 original UDP setup ran with --joint-impedance.
 """
@@ -21,6 +26,12 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Joy
 
 from rammp_teleop.logic import XboxMap
+from rammp_teleop.quest.calibrate import (
+    LiveCalibrator,
+    euler_zyx_deg,
+    load_r_align,
+    save_r_align,
+)
 from rammp_teleop.quest.command import QuestCommand
 from rammp_teleop.quest.mapping import MappingConfig
 from rammp_teleop.quest.safety import SafetyConfig
@@ -48,9 +59,18 @@ class QuestTeleopNode(TeleopNodeBase):
         self.button_resync: int = dp("button_resync", 1).value  # A
         self.button_estop: int = dp("button_estop", 2).value  # B
         self.axis_trigger: int = dp("axis_trigger", 0).value
+        self.r_align_file: str = dp("r_align_file", "").value
+        self.calib = LiveCalibrator(hold_s=dp("calib_hold_s", 2.0).value)
 
+        R_align = _euler_zyx(dp("r_align_euler_zyx_deg", [0.0, 0.0, 0.0]).value)
+        saved = load_r_align(self.r_align_file) if self.r_align_file else None
+        if saved is not None:
+            R_align = saved
+            self.get_logger().info(
+                f"R_align {euler_zyx_deg(saved)} loaded from {self.r_align_file}"
+            )
         mapping = MappingConfig(
-            R_align=_euler_zyx(dp("r_align_euler_zyx_deg", [0.0, 0.0, 0.0]).value),
+            R_align=R_align,
             trans_smooth=dp("trans_smooth", 0.8).value,
             rot_smooth=dp("rot_smooth", 0.8).value,
             jump_pos_tol=dp("jump_pos_tol", 0.05).value,
@@ -85,7 +105,8 @@ class QuestTeleopNode(TeleopNodeBase):
         )
         self.create_subscription(Joy, "/quest/joy", self._on_joy, 10)
         self.get_logger().info(
-            "Squeeze GRIP to move. Trigger = gripper, B = e-stop, A = resync."
+            "Squeeze GRIP to move. Trigger = gripper, B = e-stop, A = resync, "
+            "hold A = recalibrate."
         )
 
     def engaged_hint(self) -> str:
@@ -130,7 +151,34 @@ class QuestTeleopNode(TeleopNodeBase):
             if 0 <= self.axis_trigger < len(axes)
             else 0.0
         )
-        return fresh and XboxMap.pressed(buttons, self.button_grip)
+        grip = fresh and XboxMap.pressed(buttons, self.button_grip)
+        self._calibrate(now, XboxMap.pressed(buttons, self.button_resync), grip)
+        return grip and not self.calib.active
+
+    def _calibrate(self, now: float, a_held: bool, grip: bool) -> None:
+        ctrl_pos = self._ctrl_pose[:3, 3] if self._ctrl_pose is not None else None
+        ev = self.calib.step(now, a_held, grip, ctrl_pos)
+        if ev is None:
+            return
+        kind, R = ev
+        log = self.get_logger()
+        if kind == "armed":
+            log.info(
+                "CALIBRATING: squeeze the grip, move the hand ~20 cm along robot +X "
+                "(away from the base), release. The arm holds meanwhile."
+            )
+        elif kind == "rejected":
+            log.warn("calibration move too short or vertical; try again")
+        elif kind == "timeout":
+            log.warn("calibration timed out; hold A again to retry")
+        else:
+            self.cmd.set_r_align(R)
+            ez = euler_zyx_deg(R)
+            if self.r_align_file:
+                save_r_align(self.r_align_file, R)
+                log.info(f"R_align calibrated: {ez}, saved to {self.r_align_file}")
+            else:
+                log.info(f"R_align calibrated: {ez} (r_align_file unset; not saved)")
 
     def compute_target(self, dt: float, engaged: bool):
         ee = self.ee_pose()

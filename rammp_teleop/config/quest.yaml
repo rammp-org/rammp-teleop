@@ -1,10 +1,11 @@
 # Parameters for quest_teleop and quest_reader.
 #
 # r_align_euler_zyx_deg is a PER-SESSION calibration: the Quest tracking frame's
-# yaw depends on how the headset was oriented at boot. Run
-#   ros2 run rammp_teleop quest_calibrate
-# and paste the printed triple here before flying. The value below is from the
-# last real session on abra, not a default that survives a headset reboot.
+# yaw depends on how the headset was oriented at boot. Recalibrate from the
+# controller: hold A for calib_hold_s, squeeze the grip, move along robot +X,
+# release. With r_align_file set (the docker fragment does) the result persists
+# and overrides the triple below. The value below is from the last real session
+# on abra, not a default that survives a headset reboot.
 quest_teleop:
   ros__parameters:
     controller: ee_pose_impedance     # compliant (joint impedance + in-loop IK); ee_pose_position is stiff
@@ -35,6 +36,10 @@ quest_teleop:
     gripper_threshold: 0.5
     gripper_cmd_speed: 0.5            # GripperSetpoint.speed
     gripper_force: 0.3                # GripperSetpoint.force (current ceiling)
+
+    # --- in-session calibration (hold A) ---
+    calib_hold_s: 2.0                 # hold A this long to arm calibration
+    r_align_file: ""                  # persisted calibration; launch arg r_align_file:=... in the container
 
     # --- /quest/joy layout from quest_reader: buttons=[grip, A, B], axes=[trigger] ---
     button_grip: 0

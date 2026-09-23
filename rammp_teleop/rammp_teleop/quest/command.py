@@ -36,6 +36,11 @@ class QuestCommand:
         self._reset_safety = True  # clamp baseline must start from the measured EE
         self.stats = {"rejected": 0, "vel_clamped": 0, "ws_clamped": 0}
 
+    def set_r_align(self, R: Rotation) -> None:
+        """Swap the controller->base rotation live (in-session calibration)."""
+        self.mapper.cfg.R_align = R
+        self.resync()
+
     def resync(self) -> None:
         """Forget the hold target and the clutch references.
 

@@ -130,3 +130,11 @@ def test_hold_before_any_controller_pose_is_the_first_ee_pose():
     # a sagging arm must not drag the hold target down tick by tick
     pos2, _ = cmd.hold(np.asarray(EE0, float) + np.array([0.0, 0.0, -0.02]), ROT0)
     assert np.allclose(pos2, EE0)
+
+
+def test_set_r_align_applies_live_and_forgets_the_clutch_reference():
+    cmd = make()
+    R = Rotation.from_euler("z", 90, degrees=True)
+    cmd.set_r_align(R)
+    assert np.allclose(cmd.mapper.cfg.R_align.as_matrix(), R.as_matrix())
+    assert cmd._hold_pos is None  # resynced: next engage re-captures references
