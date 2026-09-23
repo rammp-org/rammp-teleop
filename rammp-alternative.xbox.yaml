@@ -5,7 +5,7 @@ id: xbox_teleop
 tier: experimental
 kind: docker
 container:
-  image: ghcr.io/rammp-org/rammp-teleop:dev   # pin a release tag in a deployment
+  image: ghcr.io/rammp-org/rammp-teleop:main   # pin a release tag in a deployment
   network_mode: host
   ipc: host
   privileged: true

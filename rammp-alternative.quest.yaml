@@ -1,16 +1,19 @@
 # Meta Quest 3 teleop: quest_reader (adb over USB, needs /dev/bus/usb) plus
 # quest_teleop streaming poses on ee_pose_impedance. r_align in
 # config/quest.yaml is per-session; run quest_calibrate first.
+# ~/.android holds the adb key the headset authorized ("Always allow from this
+# computer"); without the mount every container start re-prompts the headset.
 id: quest_teleop
 tier: experimental
 kind: docker
 container:
-  image: ghcr.io/rammp-org/rammp-teleop:dev
+  image: ghcr.io/rammp-org/rammp-teleop:main
   network_mode: host
   ipc: host
   privileged: true
   volumes:
     - /dev:/dev
+    - /home/abra/.android:/root/.android
   environment:
     ROS_DOMAIN_ID: "0"
   command: /module_ws/src/rammp-teleop/scripts/launch_entry.py rammp_teleop quest.launch.py

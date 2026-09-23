@@ -3,7 +3,7 @@ id: quest_teleop_mock
 tier: experimental
 kind: docker
 container:
-  image: ghcr.io/rammp-org/rammp-teleop:dev
+  image: ghcr.io/rammp-org/rammp-teleop:main
   network_mode: host
   ipc: host
   environment:

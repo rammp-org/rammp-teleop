@@ -45,7 +45,9 @@ workspace.
   pip install -e ~/oculus_reader
   ```
 
-  Connect the headset over USB and accept the debugging prompt inside it. The
+  Connect the headset over USB and accept the debugging prompt inside it, ticking
+  **Always allow from this computer** (a one-time allow re-prompts on every adb
+  server, so every container start). The
   reader and the calibration tool defeat the headset's proximity sensor on
   connect (`keep_awake`, adb `prox_close`) so it keeps tracking while not worn;
   a headset reboot clears that, and the next connect re-sends it. To hand the
