@@ -1,10 +1,10 @@
 # Parameters for xbox_teleop. Speeds are what FULL stick deflection commands.
-# The driver also rate-limits the reference (--max-ref-speed); if that is lower
-# than what these speeds imply, the target leads the arm and the leash
-# (target_lead_*) is what keeps that lead bounded.
+# The sticks are streamed as velocities (a base-frame tool twist, or one joint's
+# rate) and the driver's velocity mode integrates them, so there is no target
+# to lead the arm and nothing to leash.
 xbox_teleop:
   ros__parameters:
-    controller: ee_pose_position      # ee_pose_position | ee_pose_impedance | joint_position | joint_impedance
+    controller: ee_twist              # ee_twist | joint_velocity
     owner_id: xbox_teleop
     rate_hz: 50.0
     stream_timeout_s: 0.2             # must exceed 1/rate_hz
@@ -13,14 +13,14 @@ xbox_teleop:
     joy_timeout_s: 0.5                # no /joy for this long => sticks read as neutral
 
     # --- max speeds ---
-    max_linear_speed: 0.05            # m/s      (pose controllers)
-    max_angular_speed: 0.3            # rad/s    (pose controllers)
-    max_joint_speed: 0.2              # rad/s    (joint controllers)
+    max_linear_speed: 0.08            # m/s      (ee_twist)
+    max_angular_speed: 0.45           # rad/s    (ee_twist)
+    max_joint_speed: 0.2              # rad/s    (joint_velocity)
 
-    # --- leash: max distance the target may lead the measured state; 0 disables ---
-    target_lead_m: 0.05
-    target_lead_rad: 0.2
-    joint_target_lead_rad: 0.1
+    # --- home (hold Back for home_hold_s, keep holding; release or any input cancels) ---
+    home_hold_s: 2.0
+    # joint_1..joint_7 in rad, read off /joint_states with the arm posed by hand.
+    home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     # --- gripper (RT closes, LT opens) ---
     gripper_speed: 1.0                # full travel per second at full trigger
@@ -39,6 +39,8 @@ xbox_teleop:
     button_estop: 1                   # B
     button_estop_clear: 7             # Start
     button_resync: 3                  # Y
+    button_mode: 2                    # X: translate <-> rotate (ee_twist; sticks at rest)
+    button_home: 6                    # Back: go_to_joint_config(home_joints)
 
 joy_node:
   ros__parameters:

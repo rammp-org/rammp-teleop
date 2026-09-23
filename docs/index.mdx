@@ -14,7 +14,7 @@ where it is.
 
 | Input | Launch | Controller | How it makes a target |
 |---|---|---|---|
-| Xbox pad | `ros2 launch rammp_teleop xbox.launch.py` | `ee_pose_position` (stiff) | integrates stick velocities, leashed to the measured pose |
+| Xbox pad | `ros2 launch rammp_teleop xbox.launch.py` | `ee_twist` (stiff) | streams stick deflection as a base-frame twist |
 | Quest 3 | `ros2 launch rammp_teleop quest.launch.py` | `ee_pose_impedance` (compliant) | clutched delta of the controller pose, workspace box and step caps |
 
 See the [interface reference](interface) for topics, parameters and the button maps.

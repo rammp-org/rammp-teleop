@@ -1,18 +1,13 @@
 """Pure-Python tests for the teleop mapping and integrators. No ROS needed."""
 
-import math
-
 import pytest
 
 from rammp_teleop.logic import (
-    CartesianIntegrator,
     GripperIntegrator,
-    JointIntegrator,
+    JointSelector,
     XboxMap,
     apply_deadzone,
-    quat_angle,
-    quat_from_rotvec,
-    quat_mul,
+    setpoint_topic,
     trigger_amount,
 )
 
@@ -39,32 +34,6 @@ def test_trigger_amount_maps_rest_to_zero_and_pressed_to_one():
     assert trigger_amount(1.0) == pytest.approx(0.0)
     assert trigger_amount(-1.0) == pytest.approx(1.0)
     assert trigger_amount(0.0) == pytest.approx(0.5)
-
-
-# ---------------------------------------------------------------- quaternions
-
-
-def test_quat_from_rotvec_identity():
-    assert approx(quat_from_rotvec((0.0, 0.0, 0.0)), (0.0, 0.0, 0.0, 1.0))
-
-
-def test_quat_from_rotvec_90deg_about_z():
-    q = quat_from_rotvec((0.0, 0.0, math.pi / 2))
-    s = math.sqrt(0.5)
-    assert approx(q, (0.0, 0.0, s, s))
-
-
-def test_quat_angle_between():
-    a = quat_from_rotvec((0.0, 0.0, 0.3))
-    b = quat_from_rotvec((0.0, 0.0, -0.2))
-    assert quat_angle(a, b) == pytest.approx(0.5)
-    assert quat_angle(a, a) == pytest.approx(0.0)
-
-
-def test_quat_mul_composes_rotations():
-    a = quat_from_rotvec((0.0, 0.0, 0.3))
-    b = quat_from_rotvec((0.0, 0.0, 0.4))
-    assert approx(quat_mul(a, b), quat_from_rotvec((0.0, 0.0, 0.7)))
 
 
 # ---------------------------------------------------------------- Xbox mapping
@@ -107,6 +76,25 @@ def test_cartesian_command_all_six_dof():
     assert approx(w, (1.0, -1.0, 1.0))
 
 
+def test_cartesian_command_rotate_mode_sticks_turn_and_never_translate():
+    # left stick up -> nose up (-pitch), left stick left -> -roll, right stick left -> +yaw
+    axes, _ = joy({MAP.axis_left_y: 1.0, MAP.axis_left_x: 1.0, MAP.axis_right_x: 1.0})
+    v, w = MAP.cartesian_command(axes, 0.0, rotate=True)
+    assert v == (0.0, 0.0, 0.0)
+    assert approx(w, (-1.0, -1.0, 1.0))
+    # right stick Y and the D-pad do nothing in rotate mode
+    axes, _ = joy({MAP.axis_right_y: 1.0, MAP.axis_dpad_x: 1.0, MAP.axis_dpad_y: 1.0})
+    v, w = MAP.cartesian_command(axes, 0.0, rotate=True)
+    assert v == (0.0, 0.0, 0.0) and w == (0.0, 0.0, 0.0)
+
+
+def test_is_active_follows_the_mode():
+    right_y, _ = joy({MAP.axis_right_y: 1.0})
+    assert MAP.is_active(right_y, 0.15)
+    assert not MAP.is_active(right_y, 0.15, rotate=True)
+    assert MAP.is_active(joy({MAP.axis_left_x: 1.0})[0], 0.15, rotate=True)
+
+
 def test_edge_buttons():
     _, buttons = joy(buttons={MAP.button_estop: 1})
     assert MAP.pressed(buttons, MAP.button_estop)
@@ -136,117 +124,29 @@ def test_is_active_false_when_no_joy_at_all():
     assert not MAP.is_active([], deadzone=0.15)
 
 
-# ---------------------------------------------------------------- Cartesian integrator
+# ---------------------------------------------------------------- Joint selector
 
 
-def test_cartesian_integrator_translates_at_max_speed():
-    integ = CartesianIntegrator(
-        max_linear=0.1, max_angular=1.0, lead_m=10.0, lead_rad=10.0
-    )
-    integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
-    integ.step(
-        (1.0, 0.0, 0.0),
-        (0.0, 0.0, 0.0),
-        dt=0.5,
-        actual_p=(0.0, 0.0, 0.0),
-        actual_q=(0.0, 0.0, 0.0, 1.0),
-    )
-    assert approx(integ.position, (0.05, 0.0, 0.0))
+def test_joint_selector_velocities_selected_joint_only():
+    s = JointSelector()
+    s.select(2)
+    v = s.velocities(0.5, max_speed=0.2)
+    assert len(v) == 7
+    assert v[2] == pytest.approx(0.1)
+    assert all(x == 0.0 for i, x in enumerate(v) if i != 2)
 
 
-def test_cartesian_integrator_rotates_about_world_z():
-    integ = CartesianIntegrator(
-        max_linear=0.1, max_angular=1.0, lead_m=10.0, lead_rad=10.0
-    )
-    integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
-    integ.step(
-        (0.0, 0.0, 0.0),
-        (0.0, 0.0, 1.0),
-        dt=0.2,
-        actual_p=(0.0, 0.0, 0.0),
-        actual_q=(0.0, 0.0, 0.0, 1.0),
-    )
-    assert approx(integ.orientation, quat_from_rotvec((0.0, 0.0, 0.2)), tol=1e-9)
+def test_joint_selector_zero_rate_is_all_zeros():
+    assert JointSelector().velocities(0.0, max_speed=0.2) == [0.0] * 7
 
 
-def test_cartesian_leash_caps_position_lead():
-    integ = CartesianIntegrator(
-        max_linear=1.0, max_angular=1.0, lead_m=0.05, lead_rad=10.0
-    )
-    integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
-    for _ in range(10):
-        integ.step(
-            (1.0, 0.0, 0.0),
-            (0.0, 0.0, 0.0),
-            dt=0.1,
-            actual_p=(0.0, 0.0, 0.0),
-            actual_q=(0.0, 0.0, 0.0, 1.0),
-        )
-    assert approx(integ.position, (0.05, 0.0, 0.0))
-
-
-def test_cartesian_leash_caps_orientation_lead():
-    integ = CartesianIntegrator(
-        max_linear=1.0, max_angular=1.0, lead_m=10.0, lead_rad=0.1
-    )
-    integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
-    for _ in range(10):
-        integ.step(
-            (0.0, 0.0, 0.0),
-            (0.0, 0.0, 1.0),
-            dt=0.1,
-            actual_p=(0.0, 0.0, 0.0),
-            actual_q=(0.0, 0.0, 0.0, 1.0),
-        )
-    assert quat_angle(integ.orientation, (0.0, 0.0, 0.0, 1.0)) == pytest.approx(0.1)
-
-
-def test_cartesian_orientation_stays_normalized():
-    integ = CartesianIntegrator(
-        max_linear=1.0, max_angular=2.0, lead_m=10.0, lead_rad=10.0
-    )
-    integ.reset((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
-    for _ in range(500):
-        integ.step(
-            (0.0, 0.0, 0.0),
-            (0.3, -0.7, 0.2),
-            dt=0.02,
-            actual_p=(0.0, 0.0, 0.0),
-            actual_q=integ.orientation,
-        )
-    assert math.sqrt(sum(c * c for c in integ.orientation)) == pytest.approx(
-        1.0, abs=1e-9
-    )
-
-
-# ---------------------------------------------------------------- Joint integrator
-
-
-def test_joint_integrator_jogs_selected_joint_only():
-    integ = JointIntegrator(max_speed=0.5, lead_rad=10.0)
-    integ.reset([0.0] * 7)
-    integ.select(3)
-    integ.step(-1.0, dt=0.1, actual=[0.0] * 7)
-    assert integ.positions[3] == pytest.approx(-0.05)
-    assert all(p == 0.0 for i, p in enumerate(integ.positions) if i != 3)
-
-
-def test_joint_integrator_selection_wraps():
-    integ = JointIntegrator(max_speed=0.5, lead_rad=10.0)
-    integ.select(6)
-    integ.select_next(+1)
-    assert integ.selected == 0
-    integ.select_next(-1)
-    assert integ.selected == 6
-
-
-def test_joint_integrator_leash():
-    integ = JointIntegrator(max_speed=1.0, lead_rad=0.1)
-    integ.reset([0.0] * 7)
-    integ.select(0)
-    for _ in range(10):
-        integ.step(1.0, dt=0.1, actual=[0.0] * 7)
-    assert integ.positions[0] == pytest.approx(0.1)
+def test_joint_selector_wraps():
+    s = JointSelector()
+    s.select(6)
+    s.select_next(+1)
+    assert s.selected == 0
+    s.select_next(-1)
+    assert s.selected == 6
 
 
 # ---------------------------------------------------------------- Gripper integrator
@@ -262,3 +162,13 @@ def test_gripper_integrator_closes_opens_and_clamps():
     assert g.step(close=0.0, open_=0.0, dt=0.2) is False  # no change, nothing to send
     g.step(close=1.0, open_=0.0, dt=5.0)
     assert g.position == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------- setpoint topic
+
+
+def test_setpoint_topic_prefixes_driver_channel_names():
+    # The driver names channels relative to /setpoint/ ("pose"), not as topics.
+    assert setpoint_topic("pose") == "/setpoint/pose"
+    assert setpoint_topic("joint_position") == "/setpoint/joint_position"
+    assert setpoint_topic("/setpoint/pose") == "/setpoint/pose"

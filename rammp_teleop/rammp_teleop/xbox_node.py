@@ -1,9 +1,16 @@
-"""Xbox-controller teleop through the streaming tier.
+"""Xbox-controller teleop through the streaming tier, as velocities.
 
-The self-centering sticks are the deadman: the arm moves while a stick, the
-D-pad or a trigger is deflected and holds otherwise. On every deflected -> released
-edge (and back) the target is re-seeded from the measured state, so letting go
-stops the arm where it is rather than at a leashed target ahead of it.
+The sticks command a base-frame tool twist (`ee_twist`) or one joint's rate
+(`joint_velocity`). On `ee_twist` the X button toggles between translate mode
+(sticks move, D-pad tilts) and rotate mode (sticks turn the tool about the base
+axes, no translation); the switch only applies while the sticks are at rest.
+The driver's velocity mode integrates the velocities, so there is no
+target to run ahead of the arm and nothing to leash. The self-centering sticks
+are the deadman: zero velocity is streamed whenever they are at rest. The
+gripper is the one position target, integrated from the triggers and re-seeded
+from the measured gripper state on every deflected/released edge. Holding Back
+for `home_hold_s` sends the arm to `home_joints` through the driver's planner;
+the move runs only while Back stays held (release, or any stick input, cancels).
 """
 
 from __future__ import annotations
@@ -14,32 +21,37 @@ from typing import Optional
 
 from sensor_msgs.msg import Joy
 
-from rammp_teleop.logic import (
-    CartesianIntegrator,
-    GripperIntegrator,
-    JointIntegrator,
-    XboxMap,
-)
-from rammp_teleop.session import TeleopNodeBase, pose_msg, run
+from rammp_teleop.logic import GripperIntegrator, JointSelector, XboxMap
+from rammp_teleop.session import TeleopNodeBase, run, twist_msg
+
+ZERO3 = (0.0, 0.0, 0.0)
 
 
 class XboxTeleopNode(TeleopNodeBase):
     def __init__(self) -> None:
         super().__init__(
-            "xbox_teleop", default_controller="ee_pose_position", default_rate_hz=50.0
+            "xbox_teleop", default_controller="ee_twist", default_rate_hz=50.0
         )
+        if self.controller not in ("ee_twist", "joint_velocity"):
+            raise ValueError(
+                "xbox_teleop streams velocities; controller must be ee_twist or joint_velocity"
+            )
         dp = self.declare_parameter
         self.joy_topic: str = dp("joy_topic", "/joy").value
         self.deadzone: float = dp("deadzone", 0.15).value
         self.joy_timeout_s: float = dp("joy_timeout_s", 0.5).value
 
-        max_linear = dp("max_linear_speed", 0.05).value  # m/s at full stick
-        max_angular = dp("max_angular_speed", 0.3).value  # rad/s at full stick
-        max_joint = dp("max_joint_speed", 0.2).value  # rad/s at full stick
-        lead_m = dp("target_lead_m", 0.05).value  # leash; 0 disables
-        lead_rad = dp("target_lead_rad", 0.2).value
-        joint_lead = dp("joint_target_lead_rad", 0.1).value
+        self.max_linear: float = dp("max_linear_speed", 0.05).value  # m/s at full stick
+        self.max_angular: float = dp(
+            "max_angular_speed", 0.3
+        ).value  # rad/s at full stick
+        self.max_joint: float = dp("max_joint_speed", 0.2).value  # rad/s at full stick
         gripper_speed = dp("gripper_speed", 1.0).value  # travel fraction per second
+        self.home_joints: list = list(dp("home_joints", [0.0] * 7).value)
+        self.button_home: int = dp("button_home", 6).value  # Back
+        self.home_hold_s: float = dp("home_hold_s", 2.0).value
+        self._home_pressed_at = 0.0  # monotonic time Back went down; 0 = up
+        self._home_fired = False  # one homing per press
 
         self.map = XboxMap(
             axis_left_x=dp("axis_left_x", 0).value,
@@ -53,10 +65,11 @@ class XboxTeleopNode(TeleopNodeBase):
             button_estop=dp("button_estop", 1).value,
             button_estop_clear=dp("button_estop_clear", 7).value,
             button_resync=dp("button_resync", 3).value,
+            button_mode=dp("button_mode", 2).value,
         )
+        self.rotate = False  # ee_twist: False = translate mode, True = rotate mode
 
-        self.cart = CartesianIntegrator(max_linear, max_angular, lead_m, lead_rad)
-        self.joints = JointIntegrator(max_joint, joint_lead)
+        self.joints = JointSelector()
         self.gripper = GripperIntegrator(gripper_speed)
 
         self._joy: Optional[Joy] = None
@@ -68,7 +81,8 @@ class XboxTeleopNode(TeleopNodeBase):
 
         self.create_subscription(Joy, self.joy_topic, self._on_joy, 10)
         self.get_logger().info(
-            "Sticks move the arm. B = e-stop, Start = clear, Y = resync."
+            f"Sticks move the arm. X = translate/rotate, hold Back {self.home_hold_s:.0f}s "
+            "= home, B = e-stop, Start = clear, Y = re-seed the gripper."
         )
 
     def engaged_hint(self) -> str:
@@ -100,37 +114,59 @@ class XboxTeleopNode(TeleopNodeBase):
             self.publish_estop(False, "xbox Start button")
         if rising(self.map.button_resync):
             self.resync("Y button")
+        if self.map.pressed(buttons, self.button_home):
+            if self._home_pressed_at == 0.0:
+                self._home_pressed_at = now
+                self._home_fired = False
+                self.get_logger().info(f"hold Back {self.home_hold_s:.1f}s to go home")
+            elif (
+                not self._home_fired and now - self._home_pressed_at >= self.home_hold_s
+            ):
+                self._home_fired = True
+                if self._active_prev:
+                    self.get_logger().warn("release the sticks to go home")
+                elif len(self.home_joints) != 7:
+                    self.get_logger().warn("home_joints must hold 7 values; not homing")
+                else:
+                    self.go_home(self.home_joints)
+        else:
+            self._home_pressed_at = 0.0
+            self.cancel_home("Back released")
+        if rising(self.map.button_mode) and self.uses_twist:
+            if self._active_prev:
+                self.get_logger().warn("release the sticks to change mode")
+            else:
+                self.rotate = not self.rotate
+                self.get_logger().info(
+                    f"mode: {'rotate' if self.rotate else 'translate'}"
+                )
 
-        active = joy_fresh and self.map.is_active(axes, self.deadzone)
+        active = joy_fresh and self.map.is_active(axes, self.deadzone, self.rotate)
         if active != self._active_prev:
             self.resync("sticks deflected" if active else "sticks released")
             self._active_prev = active
         return active
 
     def compute_target(self, dt: float, engaged: bool):
-        if self.uses_pose:
-            ee = self.ee_pose()
-            if ee is None:
-                return None
-            ap, aq = ee
-            if engaged:
-                lin, ang = self.map.cartesian_command(self._axes, self.deadzone)
-                self.cart.step(lin, ang, dt, ap, aq)
-            return pose_msg(self.cart.position, self.cart.orientation)
+        if self.uses_twist:
+            lin, ang = (
+                self.map.cartesian_command(self._axes, self.deadzone, self.rotate)
+                if engaged
+                else (ZERO3, ZERO3)
+            )
+            return twist_msg(
+                [v * self.max_linear for v in lin], [v * self.max_angular for v in ang]
+            )
 
-        q = self.joint_positions()
-        if q is None:
-            return None
+        rate = 0.0
         if engaged:
             step = self.map.joint_select_step(self._axes)
             if step != 0 and self._prev_select_step == 0:
                 self.joints.select_next(step)
                 self.get_logger().info(f"jogging joint_{self.joints.selected + 1}")
             self._prev_select_step = step
-            self.joints.step(
-                self.map.joint_jog_command(self._axes, self.deadzone), dt, q
-            )
-        return list(self.joints.positions)
+            rate = self.map.joint_jog_command(self._axes, self.deadzone)
+        return self.joints.velocities(rate, self.max_joint)
 
     def gripper_target(self, dt: float, engaged: bool):
         if not engaged:
@@ -139,12 +175,6 @@ class XboxTeleopNode(TeleopNodeBase):
         return self.gripper.position if self.gripper.step(close, open_, dt) else None
 
     def seed_from_state(self) -> None:
-        ee = self.ee_pose()
-        q = self.joint_positions()
-        if self.uses_pose and ee is not None:
-            self.cart.reset(*ee)
-        elif q is not None:
-            self.joints.reset(q)
         g = self.gripper_position()
         if g is not None:
             self.gripper.reset(g)

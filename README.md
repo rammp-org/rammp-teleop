@@ -10,7 +10,7 @@ where it is.
 
 | Input    | Launch                                     | Controller                      | Target                                                          |
 | -------- | ------------------------------------------ | ------------------------------- | --------------------------------------------------------------- |
-| Xbox pad | `ros2 launch rammp_teleop xbox.launch.py`  | `ee_pose_position` (stiff)      | stick velocities integrated, leashed to the measured pose       |
+| Xbox pad | `ros2 launch rammp_teleop xbox.launch.py`  | `ee_twist` (stiff)              | stick deflection streamed as a base-frame twist                 |
 | Quest 3  | `ros2 launch rammp_teleop quest.launch.py` | `ee_pose_impedance` (compliant) | clutched delta of the controller pose, workspace box, step caps |
 
 Each launch file also starts the device reader (`joy_node` for the pad,
@@ -59,14 +59,14 @@ workspace.
 Against a running `kinova_gen3_node`:
 
 ```bash
-ros2 launch rammp_teleop xbox.launch.py                      # ee_pose_position
-ros2 launch rammp_teleop xbox.launch.py controller:=joint_position
+ros2 launch rammp_teleop xbox.launch.py                      # ee_twist
+ros2 launch rammp_teleop xbox.launch.py controller:=joint_velocity
 ros2 launch rammp_teleop quest.launch.py                     # ee_pose_impedance
 ros2 launch rammp_teleop quest.launch.py mock:=true          # scripted controller, no headset
 ```
 
 Sanity checks: `ros2 topic echo /stream_status` (open: true, the controller you
-asked for) and `ros2 topic echo --qos-reliability best_effort /setpoint/pose`.
+asked for) and `ros2 topic echo --qos-reliability best_effort /setpoint/twist`.
 
 ## Tests
 

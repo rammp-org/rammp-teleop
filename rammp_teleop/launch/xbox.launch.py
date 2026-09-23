@@ -22,8 +22,8 @@ def generate_launch_description():
             DeclareLaunchArgument("params_file", default_value=default_params),
             DeclareLaunchArgument(
                 "controller",
-                default_value="ee_pose_position",
-                description="ee_pose_position | ee_pose_impedance | joint_position | joint_impedance",
+                default_value="ee_twist",
+                description="ee_twist | joint_velocity",
             ),
             DeclareLaunchArgument(
                 "device_id", default_value="0", description="/dev/input/js<N>"

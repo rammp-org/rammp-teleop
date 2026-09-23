@@ -14,5 +14,5 @@ container:
   environment:
     ROS_DOMAIN_ID: "0"
   command: /module_ws/src/rammp-teleop/scripts/launch_entry.py rammp_teleop xbox.launch.py
-publishes: [/setpoint/pose, /setpoint/gripper, /estop]
+publishes: [/setpoint/twist, /setpoint/gripper, /estop]
 subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status, /control_status]

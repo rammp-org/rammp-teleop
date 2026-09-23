@@ -8,12 +8,13 @@ already be running.
 
 Published by every teleop node:
 
-| Topic                      | Type                                   | Notes                                                                                  |
-| -------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------- |
-| `/setpoint/pose`           | `rammp_arm_interfaces/PoseSetpoint`    | absolute tool pose, base frame, every tick while the stream is open (pose controllers) |
-| `/setpoint/joint_position` | `rammp_arm_interfaces/JointSetpoint`   | instead of the pose topic when a joint controller is selected (Xbox only)              |
-| `/setpoint/gripper`        | `rammp_arm_interfaces/GripperSetpoint` | on change, carrying the arm's token                                                    |
-| `/estop`                   | `rammp_common_interfaces/EStop`        | on button press                                                                        |
+| Topic                      | Type                                   | Notes                                                                          |
+| -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------ |
+| `/setpoint/twist`          | `rammp_arm_interfaces/TwistSetpoint`   | tool twist, base frame, every tick while the stream is open (Xbox, `ee_twist`) |
+| `/setpoint/joint_velocity` | `rammp_arm_interfaces/JointSetpoint`   | seven joint velocities instead of the twist (Xbox, `joint_velocity`)           |
+| `/setpoint/pose`           | `rammp_arm_interfaces/PoseSetpoint`    | absolute tool pose, base frame, every tick while the stream is open (Quest)    |
+| `/setpoint/gripper`        | `rammp_arm_interfaces/GripperSetpoint` | on change, carrying the arm's token                                            |
+| `/estop`                   | `rammp_common_interfaces/EStop`        | on button press                                                                |
 
 Published by `quest_reader` only:
 
@@ -24,28 +25,34 @@ Published by `quest_reader` only:
 
 Subscribed:
 
-| Topic                              | Type                                    | Used for                                           |
-| ---------------------------------- | --------------------------------------- | -------------------------------------------------- |
-| `/ee_state`                        | `rammp_arm_interfaces/EeState`          | seeding and leashing the target (pose controllers) |
-| `/joint_states`                    | `sensor_msgs/JointState`                | seeding and leashing (joint controllers)           |
-| `/gripper_state`                   | `rammp_arm_interfaces/GripperState`     | seeding the gripper target                         |
-| `/stream_status`                   | `rammp_arm_interfaces/StreamStatus`     | noticing a stream the driver closed                |
-| `/control_status`                  | `rammp_common_interfaces/ControlStatus` | noticing lost or seized ownership, e-stop          |
-| `/joy`                             | `sensor_msgs/Joy`                       | Xbox only, from `joy_node`                         |
-| `/quest/<hand>/pose`, `/quest/joy` | see above                               | Quest only, from `quest_reader`                    |
+| Topic                              | Type                                    | Used for                                                         |
+| ---------------------------------- | --------------------------------------- | ---------------------------------------------------------------- |
+| `/ee_state`                        | `rammp_arm_interfaces/EeState`          | seeding the target (Quest); driver-alive check (Xbox `ee_twist`) |
+| `/joint_states`                    | `sensor_msgs/JointState`                | driver-alive check (Xbox `joint_velocity`)                       |
+| `/gripper_state`                   | `rammp_arm_interfaces/GripperState`     | seeding the gripper target                                       |
+| `/stream_status`                   | `rammp_arm_interfaces/StreamStatus`     | noticing a stream the driver closed                              |
+| `/control_status`                  | `rammp_common_interfaces/ControlStatus` | noticing lost or seized ownership, e-stop                        |
+| `/joy`                             | `sensor_msgs/Joy`                       | Xbox only, from `joy_node`                                       |
+| `/quest/<hand>/pose`, `/quest/joy` | see above                               | Quest only, from `quest_reader`                                  |
 
-## Services used
+## Services and actions used
 
 `/acquire_control`, `/list_controllers`, `/open_stream`, `/close_stream`,
 `/release_control`. Note that acquire **seizes**: do not start a teleop node while
 an orchestrator owns the arm.
 
+`/go_to_joint_config` (action, Xbox **Back** held for `home_hold_s`): the node
+closes its stream, sends `home_joints` with its token, and the driver's planner
+drives the arm. The move is hold-to-run: releasing **Back**, or any stick, D-pad or
+trigger input, cancels the goal. The next engage reopens the stream.
+
 ## Session behaviour
 
-1. Wait for `/ee_state` (or `/joint_states`) so the target starts from reality.
+1. Wait for `/ee_state` (or `/joint_states`) so the driver is known to be up and a
+   pose target can start from reality.
 1. `/acquire_control` with `owner_id` -> token, stamped on every setpoint.
 1. `/list_controllers` -> the selected controller must be `available`; its channel
-   names the setpoint topic.
+   names the setpoint topic relative to `/setpoint/` (`pose` -> `/setpoint/pose`).
 1. Create the setpoint publisher and wait for the driver to subscribe (DDS
    discovery must settle before the stream opens, or the first setpoints go
    nowhere and the session expires).
@@ -63,26 +70,34 @@ Setpoint QoS is BEST_EFFORT / KEEP_LAST / depth 1. `stream_timeout_s` must excee
 
 ## Xbox controls
 
-The self-centering sticks are the deadman: the arm moves while a stick, the D-pad
-or a trigger is deflected past the deadzone and holds otherwise. On every
-deflected/released edge the target is re-seeded from the measured state, so letting
-go stops the arm where it is rather than at a leashed target ahead of it.
+The sticks are streamed as velocities: a base-frame tool twist on `ee_twist`, or one
+joint's rate on `joint_velocity`. The driver's velocity mode integrates them, so
+there is no target to run ahead of the arm. The self-centering sticks are the
+deadman: zero velocity is streamed whenever they are at rest, and the driver also
+commands zero if the stream goes stale. The gripper is the one position target; it is
+re-seeded from the measured gripper state on every deflected/released edge.
 
-| Input                  | `ee_pose_position` (default)       | `joint_position`       |
-| ---------------------- | ---------------------------------- | ---------------------- |
-| Left stick up/down     | +x / -x (base frame)               | jog selected joint +/- |
-| Left stick left/right  | +y / -y                            |                        |
-| Right stick up/down    | +z / -z                            |                        |
-| Right stick left/right | yaw about +z (left = CCW)          |                        |
-| D-pad up/down          | pitch about y                      |                        |
-| D-pad left/right       | roll about x                       | previous / next joint  |
-| RT / LT                | close / open gripper (incremental) | same                   |
-| **B**                  | publish `/estop engaged: true`     | same                   |
-| **Start**              | publish `/estop engaged: false`    | same                   |
-| **Y**                  | re-seed target from measured state | same                   |
+`ee_twist` has two modes, toggled with **X** while the sticks are at rest (a press
+mid-deflection is refused so a translation cannot turn into a rotation): *translate*
+(default) and *rotate*. All rotations are about the base axes.
 
-Cartesian increments are applied in the base frame (world-aligned), matching
-`PoseSetpoint`'s frame and `/ee_state`'s `LOCAL_WORLD_ALIGNED` convention.
+| Input                  | `ee_twist` translate                          | `ee_twist` rotate            | `joint_velocity`       |
+| ---------------------- | --------------------------------------------- | ---------------------------- | ---------------------- |
+| Left stick up/down     | +x / -x (base frame)                          | pitch about y (up = nose up) | jog selected joint +/- |
+| Left stick left/right  | +y / -y                                       | roll about x                 |                        |
+| Right stick up/down    | +z / -z                                       |                              |                        |
+| Right stick left/right | yaw about +z (left = CCW)                     | yaw about +z                 |                        |
+| D-pad up/down          | pitch about y                                 |                              |                        |
+| D-pad left/right       | roll about x                                  |                              | previous / next joint  |
+| RT / LT                | close / open gripper (incremental)            | same                         | same                   |
+| **X**                  | switch to rotate                              | switch to translate          |                        |
+| **Back**               | hold 2 s: go to `home_joints`; release = stop | same                         | same                   |
+| **B**                  | publish `/estop engaged: true`                | same                         | same                   |
+| **Start**              | publish `/estop engaged: false`               | same                         | same                   |
+| **Y**                  | re-seed the gripper from measured state       | same                         | same                   |
+
+The twist is expressed in the base frame (world-aligned), matching
+`TwistSetpoint`'s frame and `/ee_state`'s `LOCAL_WORLD_ALIGNED` convention.
 
 Joy layout this was written against (Xbox Series X over USB, `ros-humble-joy` 3.3):
 axes `[LX, LY, LT, RX, RY, RT, DpadX, DpadY]` with sticks +1 = left/up and triggers
@@ -112,23 +127,23 @@ compliant controller).
 
 ### `xbox_teleop` (config/xbox.yaml)
 
-| Parameter                                | Default              | Meaning                                                                      |
-| ---------------------------------------- | -------------------- | ---------------------------------------------------------------------------- |
-| `controller`                             | `ee_pose_position`   | `ee_pose_position`, `ee_pose_impedance`, `joint_position`, `joint_impedance` |
-| `owner_id`                               | `xbox_teleop`        | name sent to `/acquire_control`                                              |
-| `rate_hz` / `stream_timeout_s`           | 50 / 0.2             | publish rate and `open_stream` deadline                                      |
-| `joy_topic`                              | `/joy`               |                                                                              |
-| `deadzone`                               | 0.15                 | stick deadzone, rescaled so full deflection still gives max speed            |
-| `joy_timeout_s`                          | 0.5                  | no `/joy` for this long => sticks read as neutral, arm holds                 |
-| `max_linear_speed` / `max_angular_speed` | 0.05 m/s / 0.3 rad/s | at full stick                                                                |
-| `max_joint_speed`                        | 0.2 rad/s            | joint jog at full stick                                                      |
-| `target_lead_m` / `target_lead_rad`      | 0.05 / 0.2           | leash: how far the target may lead the measured pose; 0 disables             |
-| `joint_target_lead_rad`                  | 0.1                  | leash per joint                                                              |
-| `gripper_speed`                          | 1.0                  | full travel per second at full trigger                                       |
-| `gripper_cmd_speed` / `gripper_force`    | 0.5 / 0.3            | `GripperSetpoint.speed` / `.force`                                           |
-| `axis_*`, `button_*`                     | see file             | joy indices                                                                  |
-| `state_wait_timeout_s`                   | 10                   | give up if no arm state arrives                                              |
-| `reopen_interval_s`                      | 1.0                  | throttle for reopen / re-acquire attempts                                    |
+| Parameter                                | Default               | Meaning                                                                               |
+| ---------------------------------------- | --------------------- | ------------------------------------------------------------------------------------- |
+| `controller`                             | `ee_twist`            | `ee_twist`, `joint_velocity`                                                          |
+| `owner_id`                               | `xbox_teleop`         | name sent to `/acquire_control`                                                       |
+| `rate_hz` / `stream_timeout_s`           | 50 / 0.2              | publish rate and `open_stream` deadline                                               |
+| `joy_topic`                              | `/joy`                |                                                                                       |
+| `deadzone`                               | 0.15                  | stick deadzone, rescaled so full deflection still gives max speed                     |
+| `joy_timeout_s`                          | 0.5                   | no `/joy` for this long => sticks read as neutral, arm holds                          |
+| `max_linear_speed` / `max_angular_speed` | 0.08 m/s / 0.45 rad/s | twist at full stick (`ee_twist`)                                                      |
+| `max_joint_speed`                        | 0.2 rad/s             | joint rate at full stick (`joint_velocity`)                                           |
+| `gripper_speed`                          | 1.0                   | full travel per second at full trigger                                                |
+| `gripper_cmd_speed` / `gripper_force`    | 0.5 / 0.3             | `GripperSetpoint.speed` / `.force`                                                    |
+| `home_joints`                            | 7 zeros               | joint_1..joint_7 (rad) for **Back**; read off `/joint_states`                         |
+| `home_hold_s`                            | 2.0                   | how long **Back** must be held before homing starts                                   |
+| `axis_*`, `button_*`                     | see file              | joy indices; `button_mode` (X) toggles translate / rotate, `button_home` (Back) homes |
+| `state_wait_timeout_s`                   | 10                    | give up if no arm state arrives                                                       |
+| `reopen_interval_s`                      | 1.0                   | throttle for reopen / re-acquire attempts                                             |
 
 ### `quest_teleop` (config/quest.yaml)
 

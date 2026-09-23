@@ -2,14 +2,20 @@
 
 Lifecycle, following kinova_gen3_ros2's streaming contract (docs/interface.md):
 
-  1. wait for /ee_state (pose controllers) or /joint_states (joint controllers)
+  1. wait for /ee_state (pose/twist controllers) or /joint_states (joint controllers)
   2. /acquire_control            -> token, stamped on every setpoint (acquire SEIZES)
-  3. /list_controllers           -> the controller must be available; take its channel
+  3. /list_controllers           -> the controller must be available; its channel,
+     relative to /setpoint/, names the setpoint topic
   4. create the setpoint publisher and let DDS discovery settle
   5. /open_stream                -> session; setpoints only count while it is open
-  6. timer at rate_hz: subclass turns its input into a target, this publishes it
-     EVERY tick, idle or not, so the session stays alive and the arm holds
+  6. timer at rate_hz: subclass turns its input into a target (a pose, a twist or
+     seven joint values), this publishes it EVERY tick, idle or not, so the
+     session stays alive and the arm holds
   7. SIGINT/SIGTERM: /close_stream, /release_control
+
+Homing (go_home): the stream is closed, /go_to_joint_config is sent with our
+token and the driver's planner drives the arm; any input while it runs cancels
+the goal. The stream stays closed until the next engage reopens it.
 
 Subclasses implement tick_input / compute_target / gripper_target / seed_from_state.
 """
@@ -22,7 +28,8 @@ from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, Twist
+from rammp_arm_interfaces.action import GoToJointConfig
 from rammp_arm_interfaces.msg import (
     EeState,
     GripperSetpoint,
@@ -30,10 +37,13 @@ from rammp_arm_interfaces.msg import (
     JointSetpoint,
     PoseSetpoint,
     StreamStatus,
+    TwistSetpoint,
 )
 from rammp_arm_interfaces.srv import CloseStream, ListControllers, OpenStream
 from rammp_common_interfaces.msg import ControlStatus, EStop
 from rammp_common_interfaces.srv import AcquireControl, ReleaseControl
+from rammp_teleop.logic import setpoint_topic
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import (
     DurabilityPolicy,
@@ -46,7 +56,9 @@ from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import JointState
 
 POSE_CONTROLLERS = ("ee_pose_position", "ee_pose_impedance")
-JOINT_CONTROLLERS = ("joint_position", "joint_impedance")
+TWIST_CONTROLLERS = ("ee_twist",)
+JOINT_CONTROLLERS = ("joint_position", "joint_impedance", "joint_velocity")
+ALL_CONTROLLERS = POSE_CONTROLLERS + TWIST_CONTROLLERS + JOINT_CONTROLLERS
 
 SETPOINT_QOS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST,
@@ -61,7 +73,7 @@ LATCHED_QOS = QoSProfile(
     durability=DurabilityPolicy.TRANSIENT_LOCAL,
 )
 
-Target = Union[Pose, Sequence[float]]
+Target = Union[Pose, Twist, Sequence[float]]
 
 
 def pose_msg(pos, quat_xyzw) -> Pose:
@@ -70,6 +82,13 @@ def pose_msg(pos, quat_xyzw) -> Pose:
     msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w = (
         float(v) for v in quat_xyzw
     )
+    return msg
+
+
+def twist_msg(linear, angular) -> Twist:
+    msg = Twist()
+    msg.linear.x, msg.linear.y, msg.linear.z = (float(v) for v in linear)
+    msg.angular.x, msg.angular.y, msg.angular.z = (float(v) for v in angular)
     return msg
 
 
@@ -88,15 +107,16 @@ class TeleopNodeBase(Node):
         self.gripper_cmd_speed: float = dp("gripper_cmd_speed", 0.5).value
         self.gripper_force: float = dp("gripper_force", 0.3).value
 
-        if self.controller not in POSE_CONTROLLERS + JOINT_CONTROLLERS:
+        if self.controller not in ALL_CONTROLLERS:
             raise ValueError(
-                f"controller must be one of {POSE_CONTROLLERS + JOINT_CONTROLLERS}, got {self.controller!r}"
+                f"controller must be one of {ALL_CONTROLLERS}, got {self.controller!r}"
             )
         if self.stream_timeout_s <= 1.0 / self.rate_hz:
             raise ValueError(
                 "stream_timeout_s must exceed the publish period or the session will expire"
             )
         self.uses_pose = self.controller in POSE_CONTROLLERS
+        self.uses_twist = self.controller in TWIST_CONTROLLERS
 
         # Set by the signal handler in run(); every blocking wait in setup()
         # checks it so SIGINT/SIGTERM during startup ends the node promptly.
@@ -115,6 +135,8 @@ class TeleopNodeBase(Node):
         self._setpoint_pub = None
         self._last_reopen_attempt = 0.0
         self._reopen_inflight = False
+        self._homing = False
+        self._home_goal = None  # ClientGoalHandle while a homing goal is in flight
 
         # --- arm state ---------------------------------------------------------
         self._ee: Optional[EeState] = None
@@ -152,6 +174,7 @@ class TeleopNodeBase(Node):
         self._list = self.create_client(ListControllers, "list_controllers")
         self._open = self.create_client(OpenStream, "open_stream")
         self._close = self.create_client(CloseStream, "close_stream")
+        self._home_client = ActionClient(self, GoToJointConfig, "go_to_joint_config")
 
         self._tick_timer = None
 
@@ -163,8 +186,9 @@ class TeleopNodeBase(Node):
         raise NotImplementedError
 
     def compute_target(self, dt: float, engaged: bool) -> Optional[Target]:
-        """Return the absolute target to stream this tick (a Pose for pose controllers,
-        seven joint values for joint controllers), or None to skip publishing."""
+        """Return the target to stream this tick (a Pose for pose controllers, a Twist
+        for ee_twist, seven joint values for joint controllers), or None to skip
+        publishing."""
         raise NotImplementedError
 
     def gripper_target(self, dt: float, engaged: bool) -> Optional[float]:
@@ -263,11 +287,13 @@ class TeleopNodeBase(Node):
         return fut.result()
 
     def _have_state(self) -> bool:
-        return self._ee is not None if self.uses_pose else self._q is not None
+        if self.uses_pose or self.uses_twist:
+            return self._ee is not None
+        return self._q is not None
 
     def resync(self, why: str) -> None:
         self.seed_from_state()
-        self.get_logger().info(f"target re-seeded from measured state ({why})")
+        self.get_logger().info(f"re-seeded from measured state ({why})")
 
     def publish_estop(self, engaged: bool, reason: str) -> None:
         msg = EStop()
@@ -279,6 +305,78 @@ class TeleopNodeBase(Node):
         self.get_logger().warn(
             f"/estop {'ENGAGED' if engaged else 'cleared'}: {reason}"
         )
+
+    # ------------------------------------------------------------------ homing
+
+    def go_home(self, joints: Sequence[float]) -> None:
+        """Close the stream and move to `joints` via /go_to_joint_config (planner-backed)."""
+        log = self.get_logger()
+        if self._homing:
+            return
+        if not self._token_valid:
+            log.warn("cannot home: no valid control token")
+            return
+        if not self._home_client.server_is_ready():
+            log.warn("cannot home: /go_to_joint_config is not available")
+            return
+        self._homing = True
+        self._home_goal = None
+        goal = GoToJointConfig.Goal()
+        goal.target_joints = [float(v) for v in joints]
+        goal.sender_id = self.owner_id
+        goal.token = self._token
+
+        def send(_f=None):
+            log.info(f"homing: sending go_to_joint_config {goal.target_joints}")
+            fut = self._home_client.send_goal_async(
+                goal, feedback_callback=self._on_home_feedback
+            )
+            fut.add_done_callback(self._on_home_accepted)
+
+        if self._stream_open:
+            self._stream_open = False  # the trajectory executor needs the arm
+            self._close.call_async(
+                CloseStream.Request(token=self._token)
+            ).add_done_callback(send)
+        else:
+            send()
+
+    def cancel_home(self, why: str) -> None:
+        if self._home_goal is not None:
+            self.get_logger().warn(f"homing cancelled ({why})")
+            self._home_goal.cancel_goal_async()
+            self._home_goal = None
+
+    def _on_home_accepted(self, f) -> None:
+        gh = f.result() if f.exception() is None else None
+        if gh is None or not gh.accepted:
+            self.get_logger().error(
+                f"homing: goal rejected ({f.exception() or 'not accepted'})"
+            )
+            self._homing = False
+            return
+        self._home_goal = gh
+        gh.get_result_async().add_done_callback(self._on_home_result)
+
+    def _on_home_feedback(self, msg) -> None:
+        fb = msg.feedback
+        self.get_logger().info(
+            f"homing: {fb.phase} {fb.fraction_complete:.0%}", throttle_duration_sec=1.0
+        )
+
+    def _on_home_result(self, f) -> None:
+        self._homing = False
+        self._home_goal = None
+        if f.exception() is not None:
+            self.get_logger().error(f"homing failed: {f.exception()}")
+            return
+        res = f.result().result
+        if res.error_code == 0:
+            self.get_logger().info(f"homing done; {self.engaged_hint()} to resume")
+        else:
+            self.get_logger().error(
+                f"homing failed ({res.error_code}): {res.error_string}"
+            )
 
     def publish_gripper(self, position: float) -> None:
         g = GripperSetpoint()
@@ -334,9 +432,15 @@ class TeleopNodeBase(Node):
                 f"{[c.name for c in resp.controllers if c.available]}"
             )
             return False
-        self._channel = cap.channels[0]
+        self._channel = setpoint_topic(cap.channels[0])
 
-        msg_type = PoseSetpoint if self.uses_pose else JointSetpoint
+        msg_type = (
+            PoseSetpoint
+            if self.uses_pose
+            else TwistSetpoint
+            if self.uses_twist
+            else JointSetpoint
+        )
         self._setpoint_pub = self.create_publisher(
             msg_type, self._channel, SETPOINT_QOS
         )
@@ -457,6 +561,7 @@ class TeleopNodeBase(Node):
             return
         if self._tick_timer is not None:
             self._tick_timer.cancel()
+        self.cancel_home("shutdown")
         if self._stream_open:
             self._call(
                 self._close,
@@ -482,6 +587,10 @@ class TeleopNodeBase(Node):
 
         engaged = self.tick_input(dt)
 
+        if self._homing:
+            if engaged:
+                self.cancel_home("operator input")
+            return  # the stream is closed; the planner has the arm
         if not self._have_state():
             return
         if not self._token_valid:
@@ -505,6 +614,9 @@ class TeleopNodeBase(Node):
         if self.uses_pose:
             msg = PoseSetpoint()
             msg.pose = target
+        elif self.uses_twist:
+            msg = TwistSetpoint()
+            msg.twist = target
         else:
             msg = JointSetpoint()
             msg.values = [float(v) for v in target]
