@@ -137,6 +137,9 @@ class TeleopNodeBase(Node):
         self._reopen_inflight = False
         self._homing = False
         self._home_goal = None  # ClientGoalHandle while a homing goal is in flight
+        self._home_label = "homing"
+        self._home_phase = ""
+        self._home_started = 0.0
 
         # --- arm state ---------------------------------------------------------
         self._ee: Optional[EeState] = None
@@ -308,26 +311,31 @@ class TeleopNodeBase(Node):
 
     # ------------------------------------------------------------------ homing
 
-    def go_home(self, joints: Sequence[float]) -> None:
-        """Close the stream and move to `joints` via /go_to_joint_config (planner-backed)."""
+    def go_home(self, joints: Sequence[float], label: str = "homing") -> None:
+        """Close the stream and move to `joints` via /go_to_joint_config (planner-backed).
+
+        `label` names the move in the log ("homing", or a taught waypoint)."""
         log = self.get_logger()
         if self._homing:
             return
         if not self._token_valid:
-            log.warn("cannot home: no valid control token")
+            log.warn(f"cannot start {label}: no valid control token")
             return
         if not self._home_client.server_is_ready():
-            log.warn("cannot home: /go_to_joint_config is not available")
+            log.warn(f"cannot start {label}: /go_to_joint_config is not available")
             return
         self._homing = True
         self._home_goal = None
+        self._home_label = label
+        self._home_phase = ""
+        self._home_started = time.monotonic()
         goal = GoToJointConfig.Goal()
         goal.target_joints = [float(v) for v in joints]
         goal.sender_id = self.owner_id
         goal.token = self._token
 
         def send(_f=None):
-            log.info(f"homing: sending go_to_joint_config {goal.target_joints}")
+            log.info(f"{label}: sending go_to_joint_config {goal.target_joints}")
             fut = self._home_client.send_goal_async(
                 goal, feedback_callback=self._on_home_feedback
             )
@@ -343,7 +351,7 @@ class TeleopNodeBase(Node):
 
     def cancel_home(self, why: str) -> None:
         if self._home_goal is not None:
-            self.get_logger().warn(f"homing cancelled ({why})")
+            self.get_logger().warn(f"{self._home_label} cancelled ({why})")
             self._home_goal.cancel_goal_async()
             self._home_goal = None
 
@@ -351,7 +359,7 @@ class TeleopNodeBase(Node):
         gh = f.result() if f.exception() is None else None
         if gh is None or not gh.accepted:
             self.get_logger().error(
-                f"homing: goal rejected ({f.exception() or 'not accepted'})"
+                f"{self._home_label}: goal rejected ({f.exception() or 'not accepted'})"
             )
             self._homing = False
             return
@@ -360,22 +368,33 @@ class TeleopNodeBase(Node):
 
     def _on_home_feedback(self, msg) -> None:
         fb = msg.feedback
+        if fb.phase != self._home_phase:
+            self._home_phase = fb.phase
+            self.get_logger().info(
+                f"{self._home_label}: {fb.phase} at "
+                f"+{time.monotonic() - self._home_started:.2f}s"
+            )
         self.get_logger().info(
-            f"homing: {fb.phase} {fb.fraction_complete:.0%}", throttle_duration_sec=1.0
+            f"{self._home_label}: {fb.phase} {fb.fraction_complete:.0%}",
+            throttle_duration_sec=1.0,
         )
 
     def _on_home_result(self, f) -> None:
         self._homing = False
         self._home_goal = None
+        label = self._home_label
+        elapsed = time.monotonic() - self._home_started
         if f.exception() is not None:
-            self.get_logger().error(f"homing failed: {f.exception()}")
+            self.get_logger().error(f"{label} failed: {f.exception()}")
             return
         res = f.result().result
         if res.error_code == 0:
-            self.get_logger().info(f"homing done; {self.engaged_hint()} to resume")
+            self.get_logger().info(
+                f"{label} done in {elapsed:.2f}s; {self.engaged_hint()} to resume"
+            )
         else:
             self.get_logger().error(
-                f"homing failed ({res.error_code}): {res.error_string}"
+                f"{label} failed ({res.error_code}) after {elapsed:.2f}s: {res.error_string}"
             )
 
     def publish_gripper(self, position: float) -> None:

@@ -22,6 +22,23 @@ xbox_teleop:
     # joint_1..joint_7 in rad, read off /joint_states with the arm posed by hand.
     home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
+    # --- teach and replay (feeding tests) ---
+    # Y + A / Y + RB save the current joints as 'food' / 'mouth'; hold A / RB for
+    # home_hold_s to go there through the planner (release or stick input cancels).
+    waypoints_file: ~/.rammp_teleop/waypoints.json
+    # Hold LB: stab straight down scoop_depth_m, then lift scoop_lift_m while
+    # raising the tines scoop_tilt_deg about the horizontal axis perpendicular to
+    # the fork. fork_axis_tool is the fork's direction in the TOOL frame:
+    #   [0, 0, 1]  straight fork, tines along the gripper's approach axis
+    #   [0, -1, 0] fork clamped across the fingers at 90 deg (camera up when level)
+    # If the tip dips instead of rising, flip the sign of the axis (or of tilt_deg).
+    fork_axis_tool: [0.0, 0.0, 1.0]
+    scoop_depth_m: 0.03
+    scoop_tilt_deg: 20.0
+    scoop_lift_m: 0.05
+    scoop_linear_speed: 0.03          # m/s   (stab and lift)
+    scoop_angular_speed: 0.3          # rad/s (tilt)
+
     # --- gripper (RT closes, LT opens) ---
     gripper_speed: 1.0                # full travel per second at full trigger
     gripper_cmd_speed: 0.5            # GripperSetpoint.speed
@@ -41,6 +58,10 @@ xbox_teleop:
     button_resync: 3                  # Y
     button_mode: 2                    # X: translate <-> rotate (ee_twist; sticks at rest)
     button_home: 6                    # Back: go_to_joint_config(home_joints)
+    button_slot_food: 0               # A:  hold = go to 'food'  (Y + A saves it)
+    button_slot_mouth: 5              # RB: hold = go to 'mouth' (Y + RB saves it)
+    button_shift: 3                   # Y:  held with a slot button = save
+    button_scoop: 4                   # LB: hold = run the scoop macro
 
 joy_node:
   ros__parameters:
