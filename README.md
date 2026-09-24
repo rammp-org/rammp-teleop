@@ -87,6 +87,34 @@ ros2 launch rammp_teleop quest.launch.py mock:=true          # scripted controll
 Sanity checks: `ros2 topic echo /stream_status` (open: true, the controller you
 asked for) and `ros2 topic echo --qos-reliability best_effort /setpoint/twist`.
 
+### Teach and replay (feeding tests)
+
+The Xbox node has two taught joint waypoints, `food` and `mouth`, and a scoop
+macro, for testing a fork fixed to the end effector. Every planned move runs only
+while its button stays held; releasing it, or touching a stick, cancels.
+
+| Input | Effect |
+|---|---|
+| Y + A / Y + RB | save the current joints as `food` / `mouth` (`waypoints_file`, survives restarts) |
+| hold A / hold RB | go to `food` / `mouth` through the planner (`/go_to_joint_config`) |
+| hold Back | go to `home_joints`, as before |
+| hold LB | scoop: stab straight down `scoop_depth_m`, then lift `scoop_lift_m` while raising the tines `scoop_tilt_deg` |
+
+The scoop streams twists on `ee_twist` and tilts about the horizontal axis
+perpendicular to the fork, worked out from `/ee_state` when LB goes down.
+`fork_axis_tool` says which way the fork points in the tool frame:
+
+```bash
+ros2 launch rammp_teleop xbox.launch.py                                   # straight fork
+ros2 launch rammp_teleop xbox.launch.py fork_axis_tool:="[0.0, -1.0, 0.0]" # fork across the fingers, 90 deg
+```
+
+The log prints the fork's base-frame direction and the tilt axis at each scoop.
+Try a small `scoop_tilt_deg` first: if the tip dips instead of rising, the axis
+sign is wrong for your holder, so negate `fork_axis_tool` (or `scoop_tilt_deg`).
+The planner-move log reports the planning and execution phase times, which is the
+plate-to-mouth planning measurement.
+
 ## Tests
 
 Pure-Python logic tests, no ROS needed:
