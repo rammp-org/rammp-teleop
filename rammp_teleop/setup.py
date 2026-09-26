@@ -27,6 +27,7 @@ setup(
             f"quest_teleop = {package_name}.quest_node:main",
             f"quest_reader = {package_name}.quest_reader:main",
             f"quest_calibrate = {package_name}.quest.calibrate:main",
+            f"space_teleop = {package_name}.space_mouse:main",
         ],
     },
 )

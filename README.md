@@ -1,7 +1,6 @@
 # rammp-teleop
 
-Operator-input teleop for the RAMMP Kinova Gen3: an **Xbox pad** and a **Meta
-Quest 3** controller, each a ROS 2 node that drives the arm through
+Operator-input teleop for the RAMMP Kinova Gen3: an **Xbox pad**, a **Meta Quest 3** controller, or a **3Dconnexion SpaceMouse Compact**, each a ROS 2 node that drives the arm through
 [`kinova-gen3-ros2`](https://github.com/rammp-org/kinova-gen3-ros2)'s streaming
 tier. The node acquires control, opens a stream on a pose controller, and streams
 an absolute target every tick. Nothing moves until the operator engages (a stick
@@ -12,9 +11,11 @@ where it is.
 | -------- | ------------------------------------------ | ------------------------------- | --------------------------------------------------------------- |
 | Xbox pad | `ros2 launch rammp_teleop xbox.launch.py`  | `ee_twist` (stiff)              | stick deflection streamed as a base-frame twist                 |
 | Quest 3  | `ros2 launch rammp_teleop quest.launch.py` | `ee_pose_impedance` (compliant) | clutched delta of the controller pose, workspace box, step caps |
+| SpaceMouse  | `ros2 launch rammp_teleop space_mouse.launch.py` | `ee_twist` (stiff) | puck deflection streamed as a 6-DOF base-frame twist |
+
 
 Each launch file also starts the device reader (`joy_node` for the pad,
-`quest_reader` for the headset). Full topic, parameter and button reference:
+`quest_reader` for the headset, `spacenav_node` for the SpaceMouse). Full topic, parameter and button reference:
 [`docs/interface.md`](docs/interface.md).
 
 ## Build on abra (Humble)
@@ -73,6 +74,9 @@ workspace.
 
   and paste the printed `r_align_euler_zyx_deg` into `rammp_teleop/config/quest.yaml`.
 
+  **SpaceMouse:** `ros-humble-spacenav` (installed on abra). Plug in the SpaceMouse;
+  `ros2 topic echo /spacenav/joy` to confirm axis layout.
+
 ## Run
 
 Against a running `kinova_gen3_node`:
@@ -82,6 +86,7 @@ ros2 launch rammp_teleop xbox.launch.py                      # ee_twist
 ros2 launch rammp_teleop xbox.launch.py controller:=joint_velocity
 ros2 launch rammp_teleop quest.launch.py                     # ee_pose_impedance
 ros2 launch rammp_teleop quest.launch.py mock:=true          # scripted controller, no headset
+ros2 launch rammp_teleop space_mouse.launch.py               # ee_twist
 ```
 
 Sanity checks: `ros2 topic echo /stream_status` (open: true, the controller you
