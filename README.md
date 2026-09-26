@@ -7,12 +7,11 @@ an absolute target every tick. Nothing moves until the operator engages (a stick
 deflection on the pad, grip squeeze on the Quest), and letting go holds the arm
 where it is.
 
-| Input    | Launch                                     | Controller                      | Target                                                          |
-| -------- | ------------------------------------------ | ------------------------------- | --------------------------------------------------------------- |
-| Xbox pad | `ros2 launch rammp_teleop xbox.launch.py`  | `ee_twist` (stiff)              | stick deflection streamed as a base-frame twist                 |
-| Quest 3  | `ros2 launch rammp_teleop quest.launch.py` | `ee_pose_impedance` (compliant) | clutched delta of the controller pose, workspace box, step caps |
-| SpaceMouse  | `ros2 launch rammp_teleop space_mouse.launch.py` | `ee_twist` (stiff) | puck deflection streamed as a 6-DOF base-frame twist |
-
+| Input      | Launch                                           | Controller                      | Target                                                          |
+| ---------- | ------------------------------------------------ | ------------------------------- | --------------------------------------------------------------- |
+| Xbox pad   | `ros2 launch rammp_teleop xbox.launch.py`        | `ee_twist` (stiff)              | stick deflection streamed as a base-frame twist                 |
+| Quest 3    | `ros2 launch rammp_teleop quest.launch.py`       | `ee_pose_impedance` (compliant) | clutched delta of the controller pose, workspace box, step caps |
+| SpaceMouse | `ros2 launch rammp_teleop space_mouse.launch.py` | `ee_twist` (stiff)              | puck deflection streamed as a 6-DOF base-frame twist            |
 
 Each launch file also starts the device reader (`joy_node` for the pad,
 `quest_reader` for the headset, `spacenav_node` for the SpaceMouse). Full topic, parameter and button reference:
