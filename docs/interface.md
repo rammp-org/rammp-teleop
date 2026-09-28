@@ -8,13 +8,13 @@ already be running.
 
 Published by every teleop node:
 
-| Topic                      | Type                                   | Notes                                                                          |
-| -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------ |
-| `/setpoint/twist`          | `rammp_arm_interfaces/TwistSetpoint`   | tool twist, base frame, every tick while the stream is open (Xbox, `ee_twist`) |
-| `/setpoint/joint_velocity` | `rammp_arm_interfaces/JointSetpoint`   | seven joint velocities instead of the twist (Xbox, `joint_velocity`)           |
-| `/setpoint/pose`           | `rammp_arm_interfaces/PoseSetpoint`    | absolute tool pose, base frame, every tick while the stream is open (Quest)    |
-| `/setpoint/gripper`        | `rammp_arm_interfaces/GripperSetpoint` | on change, carrying the arm's token                                            |
-| `/estop`                   | `rammp_common_interfaces/EStop`        | on button press                                                                |
+| Topic                      | Type                                   | Notes                                                                                      |
+| -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `/setpoint/twist`          | `rammp_arm_interfaces/TwistSetpoint`   | tool twist, base frame, every tick while the stream is open (Xbox & SpaceMouse `ee_twist`) |
+| `/setpoint/joint_velocity` | `rammp_arm_interfaces/JointSetpoint`   | seven joint velocities instead of the twist (Xbox, `joint_velocity`)                       |
+| `/setpoint/pose`           | `rammp_arm_interfaces/PoseSetpoint`    | absolute tool pose, base frame, every tick while the stream is open (Quest)                |
+| `/setpoint/gripper`        | `rammp_arm_interfaces/GripperSetpoint` | on change, carrying the arm's token                                                        |
+| `/estop`                   | `rammp_common_interfaces/EStop`        | on button press (not on SpaceMouse)                                                        |
 
 Published by `quest_reader` only:
 
@@ -25,15 +25,15 @@ Published by `quest_reader` only:
 
 Subscribed:
 
-| Topic                              | Type                                    | Used for                                                         |
-| ---------------------------------- | --------------------------------------- | ---------------------------------------------------------------- |
-| `/ee_state`                        | `rammp_arm_interfaces/EeState`          | seeding the target (Quest); driver-alive check (Xbox `ee_twist`) |
-| `/joint_states`                    | `sensor_msgs/JointState`                | driver-alive check (Xbox `joint_velocity`)                       |
-| `/gripper_state`                   | `rammp_arm_interfaces/GripperState`     | seeding the gripper target                                       |
-| `/stream_status`                   | `rammp_arm_interfaces/StreamStatus`     | noticing a stream the driver closed                              |
-| `/control_status`                  | `rammp_common_interfaces/ControlStatus` | noticing lost or seized ownership, e-stop                        |
-| `/joy`                             | `sensor_msgs/Joy`                       | Xbox only, from `joy_node`                                       |
-| `/quest/<hand>/pose`, `/quest/joy` | see above                               | Quest only, from `quest_reader`                                  |
+| Topic                              | Type                                    | Used for                                                                      |
+| ---------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------- |
+| `/ee_state`                        | `rammp_arm_interfaces/EeState`          | seeding the target (Quest); driver-alive check (Xbox & SpaceMouse `ee_twist`) |
+| `/joint_states`                    | `sensor_msgs/JointState`                | driver-alive check (Xbox `joint_velocity`)                                    |
+| `/gripper_state`                   | `rammp_arm_interfaces/GripperState`     | seeding the gripper target                                                    |
+| `/stream_status`                   | `rammp_arm_interfaces/StreamStatus`     | noticing a stream the driver closed                                           |
+| `/control_status`                  | `rammp_common_interfaces/ControlStatus` | noticing lost or seized ownership, e-stop                                     |
+| `/joy`                             | `sensor_msgs/Joy`                       | Xbox only, from `joy_node`                                                    |
+| `/quest/<hand>/pose`, `/quest/joy` | see above                               | Quest only, from `quest_reader`                                               |
 
 ## Services and actions used
 
@@ -123,6 +123,29 @@ workspace box, then rate-limited to `max_lin_step` / `max_ang_step` per tick. Wh
 released, the last safe target is held (not the measured pose, which sags on a
 compliant controller).
 
+## SpaceMouse controls
+
+The puck is streamed as a base-frame tool twist on `ee_twist`, similar to the Xbox controller
+but allowing for control over six axes at once (this no need to toggle modes).
+The puck itself serves as the deadman, with a zero twist streamed whenever the puck
+returns to rest or the puck input becomes stale.
+
+| Input                     | Action                      |
+| ------------------------- | --------------------------- |
+| Push / pull               | +x / -x                     |
+| Slide left / right        | +y / -y                     |
+| Lift / press              | +z / -z                     |
+| Tilt forwards / backwards | roll end-effector about +x  |
+| Tilt left / right         | pitch end-effector about +y |
+| Twist                     | yaw end-effector about +z   |
+| Left button (hold)        | close gripper               |
+| Right button (hold)       | open gripper                |
+
+Note that the gripper is controlled incrementally, as releasing the L/R button
+will stop the gripper in its current position.
+
+Due to the lack of buttons,there is no e-stop, home or re-seed button.
+
 ## Parameters
 
 ### `xbox_teleop` (config/xbox.yaml)
@@ -177,6 +200,18 @@ compliant controller).
 | `frame_id`       | `quest` |                                                                                                                                                                        |
 | `keep_awake`     | true    | on connect, wake the headset and defeat its proximity sensor over adb so it keeps tracking while not worn; re-sent every connect since a reboot clears it              |
 | `app_watchdog_s` | 2.0     | check every N s that the headset app process is alive and relaunch it over adb if not (it dies silently and the reader would repeat the last pose forever); 0 disables |
+
+### `space_teleop` (config/space_mouse.yaml)
+
+| Parameter           | Default         | Meaning                                            |
+| ------------------- | --------------- | -------------------------------------------------- |
+| `rate_hz`           | 50              | publish rate                                       |
+| `joy_topic`         | `/spacenav/joy` |                                                    |
+| `deadzone`          | 0.08            | puck deadzone                                      |
+| `max_linear_speed`  | 0.2 m/s         | linear speed at full deflection; config ships 0.4  |
+| `max_angular_speed` | 0.3 rad/s       | angular speed at full deflection; config ships 0.7 |
+| `expo`              | 2.0             | puck-to-twist response curve; 1.0 = linear         |
+| `axis_signs`        | six 1.0         | per-axis flip for a mouse not square with the base |
 
 ## Calibration
 

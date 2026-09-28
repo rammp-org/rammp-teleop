@@ -1,0 +1,14 @@
+space_teleop:
+  ros__parameters:
+    # session
+    joy_topic: /spacenav/joy
+    rate_hz: 50.0
+    joy_timeout_s: 0.3
+
+    deadzone: 0.08
+    max_linear_speed: 0.4   # m/s
+    max_angular_speed: 0.7  # rad/s
+    expo: 2.0               # 1.0 = linear puck-to-twist
+                            # (thought the puck isn't large enough to really see this in play)
+
+    axis_signs: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0] # to allow for changing orientation of how space mouse is used

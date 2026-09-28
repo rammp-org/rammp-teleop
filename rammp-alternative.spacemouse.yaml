@@ -1,0 +1,19 @@
+# 3Dconnexion SpaceMouse teleop of the arm through kinova-gen3-ros2's streaming
+# tier: spacenav_node reads the puck through the host's spacenavd (mounted
+# socket; the host runs the spacenavd service) and space_teleop streams
+# base-frame twists on ee_twist. The arm must be up; nothing moves until the
+# puck is deflected.
+id: spacemouse_teleop
+tier: experimental
+kind: docker
+container:
+  image: ghcr.io/rammp-org/rammp-teleop:main   # pin a release tag in a deployment
+  network_mode: host
+  ipc: host
+  volumes:
+    - /var/run/spnav.sock:/var/run/spnav.sock
+  environment:
+    ROS_DOMAIN_ID: "0"
+  command: /module_ws/src/rammp-teleop/scripts/launch_entry.py rammp_teleop space_mouse.launch.py
+publishes: [/setpoint/twist, /setpoint/gripper, /spacenav/joy]
+subscribes: [/ee_state, /joint_states, /gripper_state, /stream_status, /control_status]
