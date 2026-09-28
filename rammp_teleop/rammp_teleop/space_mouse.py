@@ -51,6 +51,7 @@ class SpaceTeleopNode(TeleopNodeBase):
         self.button_open: int = dp("button_open", 1).value
 
         self.grip_hold: Optional[float] = None
+        self._last_gripper_sent: Optional[float] = None
 
         # to allow for changing orientation of how space mouse is used
         if len(self.signs) != 6:
@@ -66,7 +67,7 @@ class SpaceTeleopNode(TeleopNodeBase):
 
         self.create_subscription(Joy, self.joy_topic, self.on_joy, 10)
         self.get_logger().info(
-            f"Puck controls - max linear vel: ({self.max_linear:.3f} m/s, max angular: {self.max_angular:.2f} rad/s "
+            f"Puck controls - max linear vel: {self.max_linear:.3f} m/s, max angular: {self.max_angular:.2f} rad/s; "
             "Left closes gripper, right opens"
         )
 
@@ -121,13 +122,19 @@ class SpaceTeleopNode(TeleopNodeBase):
     def gripper_target(self, dt: float, engaged: bool) -> Optional[float]:
         if self._grip_close > 0.0:
             self.grip_hold = None
-            return 1.0
-        if self._grip_open > 0.0:
+            g = 1.0
+        elif self._grip_open > 0.0:
             self.grip_hold = None
-            return 0.0
-        if self.grip_hold is None:
-            self.grip_hold = self.gripper_position()
-        return self.grip_hold
+            g = 0.0
+        else:
+            if self.grip_hold is None:
+                self.grip_hold = self.gripper_position()
+            g = self.grip_hold
+        # send on change only, not every tick
+        if g is None or g == self._last_gripper_sent:
+            return None
+        self._last_gripper_sent = g
+        return g
 
     def seed_from_state(self) -> None:
         self.grip_hold = self.gripper_position()

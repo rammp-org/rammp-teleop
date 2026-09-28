@@ -7,7 +7,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     default_params = PathJoinSubstitution(
-        [FindPackageShare("rammp_teleop"), "config", "space_teleop.yaml"]
+        [FindPackageShare("rammp_teleop"), "config", "space_mouse.yaml"]
     )
 
     return LaunchDescription(

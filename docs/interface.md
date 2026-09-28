@@ -201,7 +201,7 @@ Due to the lack of buttons,there is no e-stop, home or re-seed button.
 | `keep_awake`     | true    | on connect, wake the headset and defeat its proximity sensor over adb so it keeps tracking while not worn; re-sent every connect since a reboot clears it              |
 | `app_watchdog_s` | 2.0     | check every N s that the headset app process is alive and relaunch it over adb if not (it dies silently and the reader would repeat the last pose forever); 0 disables |
 
-### `space_teleop` (config/space_teleop.yaml)
+### `space_teleop` (config/space_mouse.yaml)
 
 | Parameter           | Default         | Meaning                                            |
 | ------------------- | --------------- | -------------------------------------------------- |
