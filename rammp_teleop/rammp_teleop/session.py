@@ -168,6 +168,7 @@ class TeleopNodeBase(Node):
             GripperSetpoint, "/setpoint/gripper", SETPOINT_QOS
         )
         self._estop_pub = self.create_publisher(EStop, "/estop", 10)
+        self._estop_seq = 0
 
         self._acquire = self.create_client(AcquireControl, "acquire_control")
         self._release = self.create_client(ReleaseControl, "release_control")
@@ -296,11 +297,15 @@ class TeleopNodeBase(Node):
         self.get_logger().info(f"re-seeded from measured state ({why})")
 
     def publish_estop(self, engaged: bool, reason: str) -> None:
+        # NOT_ENGAGED under our own source releases only the stop this node
+        # engaged; on the chair the MIB owns the latch.
         msg = EStop()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.engaged = engaged
+        msg.state = EStop.STATE_ENGAGED if engaged else EStop.STATE_NOT_ENGAGED
         msg.source = self.get_name()
         msg.reason = reason
+        self._estop_seq = (self._estop_seq + 1) & 0xFFFFFFFF
+        msg.pub_seq = self._estop_seq
         self._estop_pub.publish(msg)
         self.get_logger().warn(
             f"/estop {'ENGAGED' if engaged else 'cleared'}: {reason}"

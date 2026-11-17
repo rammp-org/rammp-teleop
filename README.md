@@ -27,7 +27,7 @@ colcon build --packages-select rammp_teleop --symlink-install
 source install/setup.bash
 ```
 
-`rammp_arm_interfaces` / `rammp_common_interfaces` v1.0.0 must already be in the
+`rammp_arm_interfaces` / `rammp_common_interfaces` v2.0.0 must already be in the
 workspace.
 
 ## Prerequisites

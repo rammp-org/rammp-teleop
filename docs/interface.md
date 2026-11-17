@@ -8,13 +8,13 @@ already be running.
 
 Published by every teleop node:
 
-| Topic                      | Type                                   | Notes                                                                                      |
-| -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `/setpoint/twist`          | `rammp_arm_interfaces/TwistSetpoint`   | tool twist, base frame, every tick while the stream is open (Xbox & SpaceMouse `ee_twist`) |
-| `/setpoint/joint_velocity` | `rammp_arm_interfaces/JointSetpoint`   | seven joint velocities instead of the twist (Xbox, `joint_velocity`)                       |
-| `/setpoint/pose`           | `rammp_arm_interfaces/PoseSetpoint`    | absolute tool pose, base frame, every tick while the stream is open (Quest)                |
-| `/setpoint/gripper`        | `rammp_arm_interfaces/GripperSetpoint` | on change, carrying the arm's token                                                        |
-| `/estop`                   | `rammp_common_interfaces/EStop`        | on button press (not on SpaceMouse)                                                        |
+| Topic                      | Type                                   | Notes                                                                                             |
+| -------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `/setpoint/twist`          | `rammp_arm_interfaces/TwistSetpoint`   | tool twist, `arm_mount` frame, every tick while the stream is open (Xbox & SpaceMouse `ee_twist`) |
+| `/setpoint/joint_velocity` | `rammp_arm_interfaces/JointSetpoint`   | seven joint velocities instead of the twist (Xbox, `joint_velocity`)                              |
+| `/setpoint/pose`           | `rammp_arm_interfaces/PoseSetpoint`    | absolute tool pose, `arm_mount` frame, every tick while the stream is open (Quest)                |
+| `/setpoint/gripper`        | `rammp_arm_interfaces/GripperSetpoint` | on change, carrying the arm's token                                                               |
+| `/estop`                   | `rammp_common_interfaces/EStop`        | on button press (not on SpaceMouse)                                                               |
 
 Published by `quest_reader` only:
 
@@ -92,12 +92,17 @@ mid-deflection is refused so a translation cannot turn into a rotation): *transl
 | RT / LT                | close / open gripper (incremental)            | same                         | same                   |
 | **X**                  | switch to rotate                              | switch to translate          |                        |
 | **Back**               | hold 2 s: go to `home_joints`; release = stop | same                         | same                   |
-| **B**                  | publish `/estop engaged: true`                | same                         | same                   |
-| **Start**              | publish `/estop engaged: false`               | same                         | same                   |
+| **B**                  | publish `/estop state: ENGAGED`               | same                         | same                   |
+| **Start**              | publish `/estop state: NOT_ENGAGED`           | same                         | same                   |
 | **Y**                  | re-seed the gripper from measured state       | same                         | same                   |
 
-The twist is expressed in the base frame (world-aligned), matching
+The twist is expressed in `arm_mount` (world-aligned at the tool), matching
 `TwistSetpoint`'s frame and `/ee_state`'s `LOCAL_WORLD_ALIGNED` convention.
+`arm_mount` has Z against gravity when the chair is level; on a tilted mount it
+is not the arm's `base_link`.
+
+Start releases only a stop this node engaged (its `source`, `xbox_teleop`): the
+arm keeps a stop per source. On the chair the MIB owns the latch.
 
 Joy layout this was written against (Xbox Series X over USB, `ros-humble-joy` 3.3):
 axes `[LX, LY, LT, RX, RY, RT, DpadX, DpadY]` with sticks +1 = left/up and triggers
@@ -111,10 +116,11 @@ All indices are parameters if your pad differs.
 | **Grip squeeze**  | clutch: hold to move; the controller's motion from the squeeze is applied to the EE pose from the squeeze |
 | **Index trigger** | gripper, analog 0..1 (or binary with `gripper_binary`)                                                    |
 | **A**             | re-seed: forget the freeze target and references (next squeeze re-captures)                               |
-| **B**             | publish `/estop engaged: true`                                                                            |
+| **B**             | publish `/estop state: ENGAGED`                                                                           |
 
-There is no e-stop clear on the headset: use the Xbox pad's Start or
-`ros2 topic pub --once /estop rammp_common_interfaces/msg/EStop "{engaged: false, source: operator}"`.
+There is no e-stop clear on the headset. Without a MIB, release it under the
+source that engaged it (the pad's Start does not, it is a different source):
+`ros2 topic pub --once /estop rammp_common_interfaces/msg/EStop "{state: 0, source: quest_teleop}"`.
 
 Translation is always base frame. Rotation acts about base axes (`rot_frame: base`)
 or the tool's own axes (`rot_frame: tool`). Controller jumps larger than
