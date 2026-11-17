@@ -3,7 +3,7 @@
 # Cyclone DDS graph. rammp-base owns ROS 2 Humble, Cyclone and the pinned
 # rammp-interfaces-ros2 in /ros2_ws; this builds rammp_teleop into /module_ws.
 # arm64/Jetson only, like every rammp-base image.
-FROM ghcr.io/rammp-org/rammp-base:2.1.0-jp6
+FROM ghcr.io/rammp-org/rammp-base:2.2.0-jp6
 
 # joy: the Xbox pad. adb + git-lfs: the Quest (oculus_reader pushes an APK to
 # the headset over adb; the APK ships through LFS, so lfs must be installed
